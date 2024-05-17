@@ -1,0 +1,4 @@
+lab.redsails.org {
+    root * /abcxyz/
+    file_server
+}
