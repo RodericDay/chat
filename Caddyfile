@@ -1,4 +1,16 @@
 lab.redsails.org {
+
+    @websockets {
+        header Connection *Upgrade*
+        header Upgrade websocket
+    }
+
+    handle_errors {
+        respond "{err.status_code} {err.status_text}"
+    }
+
+    reverse_proxy @websockets chat:9754
+
     root * /abcxyz/
     file_server
 }

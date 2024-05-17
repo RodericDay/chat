@@ -1,4 +1,5 @@
 services:
+
   caddy:
     image: caddy
     ports:
@@ -8,3 +9,12 @@ services:
       - ./index.html:/abcxyz/index.html
       - ./Caddyfile:/etc/caddy/Caddyfile
       - /data/caddy_data:/data/
+
+  chat:
+    build:
+      dockerfile_inline: |
+        FROM python:3-alpine
+        RUN pip install websockets
+    command: python -u script.py
+    volumes:
+      - ./script.py:/script.py
