@@ -6,7 +6,7 @@ services:
       - 80:80
       - 443:443
     volumes:
-      - ./index.html:/abcxyz/index.html
+      - ./static/:/abcxyz/
       - ./Caddyfile:/etc/caddy/Caddyfile
       - /data/caddy_data:/data/
 
@@ -15,6 +15,6 @@ services:
       dockerfile_inline: |
         FROM python:3-alpine
         RUN pip install websockets
-    command: python -u script.py
+    command: python -u chat.py
     volumes:
-      - ./script.py:/script.py
+      - ./src/chat.py:/chat.py

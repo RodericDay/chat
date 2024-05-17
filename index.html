@@ -1,7 +1,0 @@
-<!DOCTYPE html>
-<body>Hello world!</body>
-<script>
-const ws = new WebSocket(location.href.replace('http', 'ws'))
-ws.onmessage = ({data}) => console.log(data)
-setInterval(() => ws.send('ping'), 1000)
-</script>

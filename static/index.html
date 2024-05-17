@@ -1,0 +1,13 @@
+<!DOCTYPE html>
+<head>
+<title>Lab!</title>
+<link rel="icon" href="/pico.png" type="image/x-icon" />
+<meta name="viewport" content="width=device-width, initial-scale=.9, maximum-scale=.8">
+<script>
+const ws = new WebSocket(location.href.replace('http', 'ws'))
+ws.onmessage = ({data}) => console.log(data)
+setInterval(() => ws.send('ping'), 1000)
+</script>
+</head>
+
+<body>Hello world!</body>
