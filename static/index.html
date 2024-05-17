@@ -3,11 +3,12 @@
 <title>Lab!</title>
 <link rel="icon" href="/pico.png" type="image/x-icon" />
 <meta name="viewport" content="width=device-width, initial-scale=.9, maximum-scale=.8">
-<script>
-const ws = new WebSocket(location.href.replace('http', 'ws'))
-ws.onmessage = ({data}) => console.log(data)
-setInterval(() => ws.send('ping'), 1000)
-</script>
+<script src="script.js" defer></script>
 </head>
 
-<body>Hello world!</body>
+<body>
+<form id="form">
+<input name="message" />
+</form>
+<ul id="messages"></ul>
+</body>
