@@ -1,13 +1,23 @@
-const ws = new WebSocket(location.href.replace('http', 'ws'))
+const ws = new ReconnectingWebSocket(location.href.replace('http', 'ws'))
 
 addEventListener('post', (e) => {
     const div = document.createElement('div')
-    div.textContent = e.detail.text
+
+    if (e.detail.sender) {
+        const pre = document.createElement('b')
+        pre.textContent = e.detail.sender + ': '
+        div.appendChild(pre)
+    }
+
+    const text = document.createElement('span')
+    text.textContent = e.detail.text
+    div.appendChild(text)
+
     messages.appendChild(div)
 })
 
 addEventListener('count', (e) => {
-    count.textContent = e.detail.count
+    dispatchEvent(new CustomEvent('post', {detail: {text: `${e.detail.count} online`}}))
 })
 
 addEventListener('error', (e) => {
@@ -17,6 +27,15 @@ addEventListener('error', (e) => {
     div.textContent = e.detail.text
     errors.appendChild(div)
 })
+
+ws.onopen = () => {
+    ws.send(JSON.stringify({kind: 'login', username: 'roderic'}))
+    dispatchEvent(new CustomEvent('post', {detail: {text: 'Connected!'}}))
+}
+
+ws.onclose = () => {
+    dispatchEvent(new CustomEvent('post', {detail: {text: 'Disconnected.'}}))
+}
 
 ws.onmessage = ({data}) => {
     let event;

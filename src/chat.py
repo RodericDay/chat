@@ -14,18 +14,32 @@ async def broadcast(data):
 
 
 async def handle(websocket):
-    online.add(websocket)
-    await broadcast({'kind': 'count', 'count': len(online)})
     async for message in websocket:
         try:
             data = json.loads(message)
-            if '!' in data['text']:
-                raise RuntimeError('No yelling, please.')
-            await broadcast(data)
-        except Exception as error:
+        except:
+            await websocket.send(json.dumps({'kind': 'error', 'text': f'Error parsing {message}'}))
+
+        try:
+            match data['kind']:
+                case 'login':
+                    username = data['username']
+                    online.add(websocket)
+                    await broadcast({'kind': 'count', 'count': len(online)})
+                case 'post':
+                    if '!' in data['text']:
+                        raise RuntimeError('No yelling, please.')
+                    data['sender'] = username
+                    await broadcast(data)
+                case kind:
+                    raise RuntimeError(f'Cannot handle message of type {kind}')
+        except RuntimeError as error:
             await websocket.send(json.dumps({'kind': 'error', 'text': str(error)}))
+        except Exception as error:
+            await websocket.send(json.dumps({'kind': 'error', 'text': repr(error)}))
+
     online.discard(websocket)
-    await broadcast({'kind': 'count', 'count': len(online)})
+    await broadcast({'kind': 'post', 'text': f'{len(online)} online'})
 
 
 async def main():
