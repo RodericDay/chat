@@ -1,45 +1,42 @@
 import asyncio
+import datetime
 import json
 import signal
 
 import websockets
 
 
-online = set()
+online = {}
 
 
-async def broadcast(data):
-    string = json.dumps(data)
-    asyncio.gather(*[ws.send(string) for ws in online])
+async def broadcast(string):
+    asyncio.gather(*[ws.send(string) for ws in online.values()])
 
 
 async def handle(websocket):
-    async for message in websocket:
-        try:
-            data = json.loads(message)
-        except:
-            await websocket.send(json.dumps({'kind': 'error', 'text': f'Error parsing {message}'}))
-
-        try:
-            match data['kind']:
-                case 'login':
-                    username = data['username']
-                    online.add(websocket)
-                    await broadcast({'kind': 'count', 'count': len(online)})
-                case 'post':
-                    if '!' in data['text']:
-                        raise RuntimeError('No yelling, please.')
-                    data['sender'] = username
-                    await broadcast(data)
-                case kind:
-                    raise RuntimeError(f'Cannot handle message of type {kind}')
-        except RuntimeError as error:
-            await websocket.send(json.dumps({'kind': 'error', 'text': str(error)}))
-        except Exception as error:
-            await websocket.send(json.dumps({'kind': 'error', 'text': repr(error)}))
-
-    online.discard(websocket)
-    await broadcast({'kind': 'post', 'text': f'{len(online)} online'})
+    try:
+        await websocket.send(json.dumps({'kind': 'version', 'version': version}))
+        username = json.loads(await websocket.recv())['username']
+        if not username:
+            await websocket.send('Username cannot be blank')
+        elif username in online:
+            await websocket.send('Username taken')
+            username = None
+        else:
+            online[username] = websocket
+            await broadcast(json.dumps({'kind': 'users', 'users': list(online)}))
+            async for message in websocket:
+                data = json.loads(message)
+                if data['kind'] == 'logout':
+                    await websocket.send(message)
+                    break
+                data['timestamp'] = datetime.datetime.now().isoformat()
+                data['sender'] = username
+                if data['kind'] == 'post':
+                    await broadcast(json.dumps(data))
+    finally:
+        online.pop(username, None)
+        await broadcast(json.dumps({'kind': 'users', 'users': list(online)}))
 
 
 async def main():
@@ -48,6 +45,7 @@ async def main():
 
 
 if __name__ == "__main__":
+    version = 2
     signal.signal(signal.SIGTERM, lambda: error)  # kill gracelessly upon sigterm
     asyncio.run(main())
 

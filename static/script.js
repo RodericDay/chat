@@ -1,56 +1,89 @@
-const ws = new ReconnectingWebSocket(location.href.replace('http', 'ws'))
+const State = Object.seal({
+    mws: null,
+    username: '',
+    users: [],
+    posts: [],
+    errors: [],
+    version: null,
+})
+const StateDefaults = JSON.parse(JSON.stringify(State))
+delete StateDefaults.errors
+delete StateDefaults.posts
 
-addEventListener('post', (e) => {
-    const div = document.createElement('div')
+setInterval(async () => {
+    document.title = 'Lab' + (State.users.length ? ` (${ State.users.length })` : '')
+    toRender = { ...State }
+    toRender.posts = [...toRender.posts].reverse()
+    toRender.mws = ['CONNECTING', 'OPEN', 'CLOSING', 'CLOSED', 'UNKNOWN'][State.mws?.readyState || 4]
+    debug.textContent = JSON.stringify(toRender, null, 2)
+}, 100)
 
-    if (e.detail.sender) {
-        const pre = document.createElement('b')
-        pre.textContent = e.detail.sender + ': '
-        div.appendChild(pre)
+function MyWebSocket(url, username) {
+    const ws = new ReconnectingWebSocket(url)
+    ws.onopen = () => {
+        ws.send(JSON.stringify({ kind: 'login', username }))
     }
-
-    const text = document.createElement('span')
-    text.textContent = e.detail.text
-    div.appendChild(text)
-
-    messages.appendChild(div)
-})
-
-addEventListener('count', (e) => {
-    dispatchEvent(new CustomEvent('post', {detail: {text: `${e.detail.count} online`}}))
-})
-
-addEventListener('error', (e) => {
-    const div = document.createElement('div')
-    div.onclick = (e) => errors.removeChild(div)
-    setTimeout(() => errors.removeChild(div), 2000)
-    div.textContent = e.detail.text
-    errors.appendChild(div)
-})
-
-ws.onopen = () => {
-    ws.send(JSON.stringify({kind: 'login', username: 'roderic'}))
-    dispatchEvent(new CustomEvent('post', {detail: {text: 'Connected!'}}))
-}
-
-ws.onclose = () => {
-    dispatchEvent(new CustomEvent('post', {detail: {text: 'Disconnected.'}}))
-}
-
-ws.onmessage = ({data}) => {
-    let event;
-    try {
-        data = JSON.parse(data)
-        event = new CustomEvent(data.kind, {detail: data})
-    } catch(error) {
-        event = new CustomEvent('error', {detail: error})
+    ws.onclose = () => {
+        Object.assign(State, JSON.parse(JSON.stringify(StateDefaults)))
     }
-    dispatchEvent(event)
+    ws.onmessage = ({data}) => {
+        try {
+            data = JSON.parse(data)
+        } catch(error) {
+            data = { kind: 'error', error, data }
+            ws.close()
+        }
+        const handler = window['my' + data.kind] || console.log
+        handler(data)
+    }
+    return ws
 }
 
-form.onsubmit = (e) => {
-    e.preventDefault()
-    const json = {kind: 'post', text: form.message.value}
-    ws.send(JSON.stringify(json))
-    form.message.value = ''
+loginForm.onsubmit = (e) => {
+    e?.preventDefault()
+    localStorage.setItem('username', loginForm.username.value)
+    const url = location.href.replace('http', 'ws')
+    const mws = new MyWebSocket(url, loginForm.username.value)
+    Object.assign(State, { mws: mws })
+}
+
+logoutForm.onsubmit = (e) => {
+    e?.preventDefault()
+    localStorage.removeItem('username')
+    State.mws?.send(JSON.stringify({ kind: 'logout' }))
+}
+
+messageForm.onsubmit = (e) => {
+    e?.preventDefault()
+    State.mws?.send(JSON.stringify({ kind: 'post', text: messageForm.message.value }))
+}
+
+function myversion({ version }) {
+    if (State.version && State.version !== version) {
+        location.reload()
+    }
+    else {
+        State.version = version
+    }
+}
+
+function myerror(data) {
+    State.errors.push(data)
+}
+
+function mypost(data) {
+    State.posts.push(data)
+}
+
+function myusers({ users }) {
+    State.users = users
+}
+
+function mylogout() {
+    State.mws.close()
+}
+
+if (localStorage.getItem('username')) {
+    loginForm.username.value = localStorage.getItem('username')
+    loginForm.onsubmit()
 }
