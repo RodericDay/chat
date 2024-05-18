@@ -1,4 +1,5 @@
 import asyncio
+import json
 import signal
 
 import websockets
@@ -6,7 +7,13 @@ import websockets
 
 async def simple_echo_handle(websocket):
     async for message in websocket:
-        await websocket.send(message)
+        try:
+            text = json.loads(message)['text']
+            if '!' in text:
+                raise RuntimeError('No yelling, please.')
+            await websocket.send(message)
+        except Exception as error:
+            await websocket.send(json.dumps({'kind': 'error', 'text': f'{message} produced {error!r}'}))
 
 
 async def main():
