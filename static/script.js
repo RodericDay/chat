@@ -1,7 +1,7 @@
 const State = Object.seal({
     mws: null,
     username: '',
-    users: [],
+    users: {},
     posts: [],
     errors: [],
     version: null,
@@ -11,7 +11,8 @@ delete StateDefaults.errors
 delete StateDefaults.posts
 
 setInterval(async () => {
-    document.title = 'Lab' + (State.users.length ? ` (${ State.users.length })` : '')
+    const count = Object.keys(State.users).length
+    document.title = 'Lab' + (count ? ` (${count})` : '')
     toRender = { ...State }
     toRender.posts = [...toRender.posts].reverse()
     toRender.mws = ['CONNECTING', 'OPEN', 'CLOSING', 'CLOSED', 'UNKNOWN'][State.mws?.readyState || 4]
@@ -41,6 +42,7 @@ function MyWebSocket(url, username) {
 
 loginForm.onsubmit = (e) => {
     e?.preventDefault()
+    if (State.mws) return
     localStorage.setItem('username', loginForm.username.value)
     const url = location.href.replace('http', 'ws')
     const mws = new MyWebSocket(url, loginForm.username.value)
@@ -56,6 +58,15 @@ logoutForm.onsubmit = (e) => {
 messageForm.onsubmit = (e) => {
     e?.preventDefault()
     State.mws?.send(JSON.stringify({ kind: 'post', text: messageForm.message.value }))
+}
+
+userSettings.onchange = (e) => {
+    const settings = {
+        audio: userSettings.audio.checked,
+        video: userSettings.video.checked,
+    }
+    Object.entries(settings).map(([key, value]) => localStorage.setItem(key, value))
+    console.log(settings)
 }
 
 function myversion({ version }) {
@@ -76,7 +87,14 @@ function mypost(data) {
 }
 
 function myusers({ users }) {
-    State.users = users
+    for (user of new Set([...Object.keys(State.users), ...users])) {
+        if (!State.users[user]) {
+            State.users[user] = {}
+        }
+        else if (!users.includes(user)) {
+            delete State.users[user]
+        }
+    }
 }
 
 function mylogout() {
@@ -85,5 +103,7 @@ function mylogout() {
 
 if (localStorage.getItem('username')) {
     loginForm.username.value = localStorage.getItem('username')
+    userSettings.audio.checked = localStorage.getItem('audio') !== 'false'
+    userSettings.video.checked = localStorage.getItem('video') !== 'false'
     loginForm.onsubmit()
 }

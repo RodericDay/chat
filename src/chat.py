@@ -23,6 +23,7 @@ async def handle(websocket):
             await websocket.send('Username taken')
             username = None
         else:
+            await websocket.send(json.dumps({'kind': 'login'}))
             online[username] = websocket
             await broadcast(json.dumps({'kind': 'users', 'users': list(online)}))
             async for message in websocket:
