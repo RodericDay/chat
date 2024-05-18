@@ -5,19 +5,31 @@ import signal
 import websockets
 
 
-async def simple_echo_handle(websocket):
+online = set()
+
+
+async def broadcast(data):
+    string = json.dumps(data)
+    asyncio.gather(*[ws.send(string) for ws in online])
+
+
+async def handle(websocket):
+    online.add(websocket)
+    await broadcast({'kind': 'count', 'count': len(online)})
     async for message in websocket:
         try:
-            text = json.loads(message)['text']
-            if '!' in text:
+            data = json.loads(message)
+            if '!' in data['text']:
                 raise RuntimeError('No yelling, please.')
-            await websocket.send(message)
+            await broadcast(data)
         except Exception as error:
-            await websocket.send(json.dumps({'kind': 'error', 'text': f'{message} produced {error!r}'}))
+            await websocket.send(json.dumps({'kind': 'error', 'text': str(error)}))
+    online.discard(websocket)
+    await broadcast({'kind': 'count', 'count': len(online)})
 
 
 async def main():
-    async with websockets.serve(simple_echo_handle, '0.0.0.0', 9754):
+    async with websockets.serve(handle, '0.0.0.0', 9754):
         await asyncio.Future()  # just means forever
 
 

@@ -6,6 +6,10 @@ addEventListener('post', (e) => {
     messages.appendChild(div)
 })
 
+addEventListener('count', (e) => {
+    count.textContent = e.detail.count
+})
+
 addEventListener('error', (e) => {
     const div = document.createElement('div')
     div.onclick = (e) => errors.removeChild(div)
