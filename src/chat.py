@@ -9,8 +9,13 @@ import websockets
 online = {}
 
 
-async def broadcast(string):
-    asyncio.gather(*[ws.send(string) for ws in online.values()])
+async def broadcast(data):
+    string = json.dumps(data)
+    if usernames := data.get('targets'):
+        targets = [online[username] for username in usernames]
+    else:
+        targets = list(online.values())
+    asyncio.gather(*[ws.send(string) for ws in targets])
 
 
 async def handle(websocket):
@@ -23,9 +28,9 @@ async def handle(websocket):
             await websocket.send('Username taken')
             username = None
         else:
-            await websocket.send(json.dumps({'kind': 'login'}))
+            await websocket.send(json.dumps({'kind': 'login', 'username': username}))
             online[username] = websocket
-            await broadcast(json.dumps({'kind': 'users', 'users': list(online)}))
+            await broadcast({'kind': 'users', 'users': list(online)})
             async for message in websocket:
                 data = json.loads(message)
                 if data['kind'] == 'logout':
@@ -34,10 +39,14 @@ async def handle(websocket):
                 data['timestamp'] = datetime.datetime.now().isoformat()
                 data['sender'] = username
                 if data['kind'] == 'post':
-                    await broadcast(json.dumps(data))
+                    await broadcast(data)
+                elif data['kind'] == 'settings':
+                    await broadcast(data)
+                else:
+                    await websocket.send(json.dumps({'kind': 'unhandled', 'data': data}))
     finally:
         online.pop(username, None)
-        await broadcast(json.dumps({'kind': 'users', 'users': list(online)}))
+        await broadcast({'kind': 'users', 'users': list(online)})
 
 
 async def main():
