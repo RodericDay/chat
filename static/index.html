@@ -2,12 +2,16 @@
 <head>
 <title>Lab</title>
 <link rel="icon" href="/pico.png" type="image/x-icon" />
+<link rel="stylesheet" href="/style.css" />
 <meta name="viewport" content="width=device-width, initial-scale=.9, maximum-scale=.8">
 <script src="https://cdn.jsdelivr.net/npm/reconnecting-websocket@4.4.0/dist/reconnecting-websocket-iife.min.js"></script>
 <script src="script.js" defer></script>
 </head>
 
 <body>
+
+<div id="videos"></div>
+
 <form id="loginForm">
     <input name="username" autocomplete="off" />
     <button>log in</button>
@@ -22,9 +26,9 @@
 <form id="userSettings">
     <label>audio<input name="audio" type="checkbox" /></label>
     <label>video<input name="video" type="checkbox" /></label>
-    <label>mirror<input name="mirror" type="checkbox" /></label>
     <label>bars<input name="bars" type="checkbox" /></label>
 </form>
 
 <pre id="debug"></pre>
+
 </body>

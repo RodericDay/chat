@@ -1,31 +1,69 @@
 const State = Object.seal({
+    websockets: {},
     ws: null,
     username: '',
     users: {},
     posts: [],
     errors: [],
     version: null,
+    streams: {},
 })
-const StateDefaults = JSON.parse(JSON.stringify(State))
-delete StateDefaults.errors
-delete StateDefaults.posts
+
+const renderWebsocket = (ws) => {
+    const states = ['CONNECTING', 'OPEN', 'CLOSING', 'CLOSED', 'UNKNOWN']
+    return states[ws.readyState || 4]
+}
+
+const renderStream = (stream) => {
+    return stream.getTracks().map(track => track.kind).join(', ')
+}
+
+function diff(aa, bb) {
+    cc = [...new Set([...aa, ...bb])]
+    return [cc.filter(x => !aa.includes(x)), cc.filter(x => !bb.includes(x))]
+}
+
+const renderVideos = () => {
+    const aa = [...document.querySelectorAll('video')].map(el => el.id)
+    const bb = Object.keys(State.streams)
+    const [additions, deletions] = diff(aa, bb)
+
+    for (id of additions) {
+        let video = document.createElement('video')
+        video.srcObject = State.streams[id]
+        video.id = id
+        video.play()
+        video.muted = true
+        video.classList.toggle('mirrored', true)
+        videos.appendChild(video)
+    }
+    for (id of deletions) {
+        let video = document.getElementById(id)
+        video.parentNode.removeChild(video)
+    }
+}
 
 setInterval(async () => {
     const count = Object.keys(State.users).length
     document.title = 'Lab' + (count ? ` (${count})` : '')
     toRender = { ...State }
-    toRender.posts = [...toRender.posts].reverse()
-    toRender.ws = ['CONNECTING', 'OPEN', 'CLOSING', 'CLOSED', 'UNKNOWN'][State.ws?.readyState || 4]
+    toRender.ws = State.ws && renderWebsocket(State.ws)
+    toRender.websockets = Object.fromEntries(Object.entries(State.websockets).map(([k, v]) => [k, renderWebsocket(v)]))
+    toRender.streams = Object.fromEntries(Object.entries(State.streams).map(([k, v]) =>[k, renderStream(v)]))
+    renderVideos()
     debug.textContent = JSON.stringify(toRender, null, 2)
 }, 100)
 
 function MyWebSocket(url, username) {
+    'use strict'
+    const uid = crypto.randomUUID()
     const ws = new ReconnectingWebSocket(url)
     ws.onopen = () => {
         ws.send(JSON.stringify({ kind: 'login', username }))
     }
     ws.onclose = () => {
-        Object.assign(State, JSON.parse(JSON.stringify(StateDefaults)))
+        delete State.websockets[uid]
+        State.ws = Object.values(State.websockets)[0]
     }
     ws.onmessage = ({data}) => {
         try {
@@ -37,20 +75,24 @@ function MyWebSocket(url, username) {
         const handler = window['my' + data.kind] || console.log
         handler(data)
     }
+    State.websockets[uid] = ws
     return ws
 }
 
 loginForm.onsubmit = (e) => {
     e?.preventDefault()
-    if (State.ws) return
     localStorage.setItem('username', loginForm.username.value)
     const url = location.href.replace('http', 'ws')
-    const ws = new MyWebSocket(url, loginForm.username.value)
-    Object.assign(State, { ws: ws })
+    State.ws = new MyWebSocket(url, loginForm.username.value)
 }
 
 logoutForm.onsubmit = (e) => {
     e?.preventDefault()
+    Object.entries(State.streams).map(([uid, stream]) => {
+        stream.getTracks().map(track => track.stop())
+        delete State.streams[uid]
+    })
+    State.users = {}
     localStorage.removeItem('username')
     State.ws?.send(JSON.stringify({ kind: 'logout' }))
 }
@@ -64,7 +106,6 @@ userSettings.onchange = ({ targets }) => {
     const settings = {
         audio: userSettings.audio.checked,
         video: userSettings.video.checked,
-        mirror: userSettings.mirror.checked,
         bars: userSettings.bars.checked,
     }
     // update local
@@ -73,13 +114,20 @@ userSettings.onchange = ({ targets }) => {
     State.ws.send(JSON.stringify({ kind: 'settings', settings, targets }))
 }
 
-function mylogin({ username }) {
+async function mylogin({ username }) {
     State.username = username
     userSettings.audio.checked = localStorage.getItem('audio') !== 'false'
     userSettings.video.checked = localStorage.getItem('video') !== 'false'
-    userSettings.mirror.checked = localStorage.getItem('mirror') !== 'false'
     userSettings.bars.checked = localStorage.getItem('bars') !== 'false'
     userSettings.onchange({})
+
+    const uid = crypto.randomUUID()
+    const config = {
+        audio: true,
+        video: {width: {ideal: 320}, facingMode: 'user', frameRate: 26}
+    }
+    const stream = await navigator.mediaDevices.getUserMedia(config)
+    State.streams[uid] = stream
 }
 
 function mysettings({ sender, settings }) {
@@ -98,22 +146,21 @@ function myversion({ version }) {
 }
 
 function myerror(data) {
-    State.errors.push(data)
+    State.errors.unshift(data)
 }
 
 function mypost(data) {
-    State.posts.push(data)
+    State.posts.unshift(data)
 }
 
 function myusers({ users }) {
-    for (user of new Set([...Object.keys(State.users), ...users])) {
-        if (!State.users[user]) {
-            State.users[user] = {}
-            userSettings.onchange({ targets: [user] })
-        }
-        else if (!users.includes(user)) {
-            delete State.users[user]
-        }
+    const [additions, deletions] = diff(Object.keys(State.users), users)
+    for (user of additions) {
+        State.users[user] = {}
+        userSettings.onchange({ targets: [user] })
+    }
+    for (user of deletions) {
+        delete State.users[user]
     }
 }
 

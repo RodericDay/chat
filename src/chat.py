@@ -10,11 +10,11 @@ online = {}
 
 
 async def broadcast(data):
-    string = json.dumps(data)
     if usernames := data.get('targets'):
         targets = [online[username] for username in usernames]
     else:
         targets = list(online.values())
+    string = json.dumps(data)
     asyncio.gather(*[ws.send(string) for ws in targets])
 
 
