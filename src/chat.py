@@ -38,9 +38,7 @@ async def handle(websocket):
                     break
                 data['timestamp'] = datetime.datetime.now().isoformat()
                 data['sender'] = username
-                if data['kind'] == 'post':
-                    await broadcast(data)
-                elif data['kind'] == 'settings':
+                if data['kind'] in ['post', 'settings', 'offer', 'answer']:
                     await broadcast(data)
                 else:
                     await websocket.send(json.dumps({'kind': 'unhandled', 'data': data}))
