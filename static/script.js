@@ -198,7 +198,12 @@ async function myanswer({ sender, answer }) {
 }
 
 async function rpcConnect(user) {
-    const config = {}
+    const config = {iceServers: [{
+        // test -- https://webrtc.github.io/samples/src/content/peerconnection/trickle-ice/
+        urls: [`stun:165.227.36.123:5349`, `turn:165.227.36.123:5349`],
+        username: 'roderic',
+        credential: 'tomodachi',
+    }]}
     const rpc = new RTCPeerConnection(config)
     const stream = new MediaStream()
     rpc.onnegotiationneeded = async (e) => {
