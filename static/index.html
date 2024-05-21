@@ -11,28 +11,38 @@
 <body>
 
 <nav>
+
 <form id="loginForm">
     <input name="username" autocomplete="off" />
     <button>log in</button>
 </form>
+
 <form id="logoutForm">
+    <span id="usernameDisplay"></span>
     <button>log out</button>
 </form>
-<form id="messageForm">
-    <input name="message" autocomplete="off" />
-    <button>post</button>
-</form>
+
 <form id="userSettings">
     <label>audio<input name="audio" type="checkbox" /></label>
     <label>video<input name="video" type="checkbox" /></label>
     <label>bars<input name="bars" type="checkbox" /></label>
+    <label>chat<input name="chat" type="checkbox" /></label>
+    <label>debug<input name="debug" type="checkbox" /></label>
 </form>
-<details>
-<summary>debug</summary>
-<pre id="debug"></pre>
-</details>
+
 </nav>
 
 <div id="videos"></div>
+
+<div id="chat">
+    <form id="messageForm">
+        <input name="message" autocomplete="off" />
+        <button>post</button>
+    </form>
+    <div id="messages">
+    </div>
+</div>
+
+<div id="debug"></div>
 
 </body>

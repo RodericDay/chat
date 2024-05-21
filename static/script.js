@@ -79,23 +79,38 @@ function renderVideos() {
     reFlow(videos)
 }
 
-setInterval(async () => {
+function renderMessages() {
+    messages.textContent = State.posts.map(post => `${post.sender}: ${post.text}`).join('\n')
+}
+
+setInterval(() => {
+
     const count = Object.keys(State.users).length
     document.title = 'Lab' + (count ? ` (${count})` : '')
+
     loginForm.hidden = !!State.username
+    usernameDisplay.textContent = State.username
     logoutForm.hidden = !State.username
-    messageForm.hidden = !State.username
     userSettings.hidden = !State.username
+    chat.style.visibility = (State.username && State.settings.chat) ? 'unset' : 'hidden'
+    debug.style.visibility = State.settings.debug ? 'unset' : 'hidden'
+
     userSettings.audio.checked = localStorage.getItem('audio') !== 'false'
     userSettings.video.checked = localStorage.getItem('video') !== 'false'
     userSettings.bars.checked = localStorage.getItem('bars') !== 'false'
-    toRender = { ...State }
+    userSettings.chat.checked = localStorage.getItem('chat') === 'true'
+    userSettings.debug.checked = localStorage.getItem('debug') === 'true'
+
+    renderVideos()
+    renderMessages()
+
+    toRender = {}
     toRender.ws = State.ws && renderWebsocket(State.ws)
     toRender.websockets = Object.fromEntries(Object.entries(State.websockets).map(([k, v]) => [k, renderWebsocket(v)]))
     toRender.streams = renderStreams()
     toRender.rpcs = renderRPCs()
-    renderVideos()
     debug.textContent = JSON.stringify(toRender, null, 2)
+
 }, 100)
 
 function createWebSocket(url, username) {
@@ -223,7 +238,9 @@ logoutForm.onsubmit = (e) => {
 
 messageForm.onsubmit = (e) => {
     e?.preventDefault()
+    if (!messageForm.message.value) return
     State.ws?.send(JSON.stringify({ kind: 'post', text: messageForm.message.value }))
+    messageForm.message.value = ''
 }
 
 function wspost(data) {
@@ -235,6 +252,8 @@ userSettings.onchange = () => {
         audio: userSettings.audio.checked,
         video: userSettings.video.checked,
         bars: userSettings.bars.checked,
+        chat: userSettings.chat.checked,
+        debug: userSettings.debug.checked,
     }
     // update localStorage
     Object.entries(State.settings).map(([key, value]) => localStorage.setItem(key, value))
