@@ -2,11 +2,11 @@ const State = Object.seal({
     websockets: {},
     ws: null,
     username: '',
-    streamId: null,
+    myUid: null,
+    settings: {},
     users: {},
     posts: [],
     errors: [],
-    version: null,
     streams: {},
     rpcs: {},
 })
@@ -16,12 +16,18 @@ const renderWebsocket = (ws) => {
     return states[ws.readyState || 4]
 }
 
-const renderStream = (stream) => {
-    return stream.getTracks().map(track => track.kind).join(', ')
+const renderStreams = () => {
+    const entries = Object.entries(State.streams)
+        .filter(([k, v]) => v.active)
+        .map(([k, v]) => [k, Object.fromEntries(v.getTracks().map(({ kind, readyState }) => [kind, readyState]))])
+    return Object.fromEntries(entries)
 }
 
-const renderRPC = (rpc) => {
-    return rpc.connectionState
+const renderRPCs = () => {
+    const entries = Object.entries(State.rpcs)
+        .filter(([k, v]) => !['closed', 'failed'].includes(v.connectionState))
+        .map(([k, v]) => [k, [v.connectionState, v.iceConnectionState, v.iceGatheringState, v.signalingState].join(', ')])
+    return Object.fromEntries(entries)
 }
 
 function diff(aa, bb) {
@@ -31,7 +37,7 @@ function diff(aa, bb) {
 
 const renderVideos = () => {
     const aa = [...document.querySelectorAll('video')].map(el => el.id)
-    const bb = Object.keys(State.streams)
+    const bb = Object.entries(State.streams).filter(([k, v]) => v.active).map(([k, v]) => k)
     const [additions, deletions] = diff(aa, bb)
 
     for (id of additions) {
@@ -39,8 +45,8 @@ const renderVideos = () => {
         video.srcObject = State.streams[id]
         video.id = id
         video.play()
-        video.muted = id === State.streamId
-        video.classList.toggle('mirrored', id === State.streamId)
+        video.muted = id === State.myUid
+        video.classList.toggle('mirrored', id === State.myUid)
         videos.appendChild(video)
     }
     for (id of deletions) {
@@ -52,16 +58,23 @@ const renderVideos = () => {
 setInterval(async () => {
     const count = Object.keys(State.users).length
     document.title = 'Lab' + (count ? ` (${count})` : '')
+    loginForm.hidden = !!State.username
+    logoutForm.hidden = !State.username
+    messageForm.hidden = !State.username
+    userSettings.hidden = !State.username
+    userSettings.audio.checked = localStorage.getItem('audio') !== 'false'
+    userSettings.video.checked = localStorage.getItem('video') !== 'false'
+    userSettings.bars.checked = localStorage.getItem('bars') !== 'false'
     toRender = { ...State }
     toRender.ws = State.ws && renderWebsocket(State.ws)
     toRender.websockets = Object.fromEntries(Object.entries(State.websockets).map(([k, v]) => [k, renderWebsocket(v)]))
-    toRender.streams = Object.fromEntries(Object.entries(State.streams).map(([k, v]) =>[k, renderStream(v)]))
-    toRender.rpcs = Object.fromEntries(Object.entries(State.rpcs).map(([k, v]) =>[k, renderRPC(v)]))
+    toRender.streams = renderStreams()
+    toRender.rpcs = renderRPCs()
     renderVideos()
     debug.textContent = JSON.stringify(toRender, null, 2)
 }, 100)
 
-function MyWebSocket(url, username) {
+function createWebSocket(url, username) {
     'use strict'
     const uid = crypto.randomUUID()
     const ws = new ReconnectingWebSocket(url)
@@ -79,55 +92,26 @@ function MyWebSocket(url, username) {
             data = { kind: 'error', error, data }
             ws.close()
         }
-        const handler = window['my' + data.kind] || console.log
+        const handler = window['ws' + data.kind] || console.log
         handler(data)
     }
     State.websockets[uid] = ws
     return ws
 }
 
-loginForm.onsubmit = (e) => {
+loginForm.onsubmit = async (e) => {
     e?.preventDefault()
-    localStorage.setItem('username', loginForm.username.value)
-    const url = location.href.replace('http', 'ws')
-    State.ws = new MyWebSocket(url, loginForm.username.value)
-}
-
-logoutForm.onsubmit = (e) => {
-    e?.preventDefault()
-    Object.entries(State.streams).map(([uid, stream]) => {
-        stream.getTracks().map(track => track.stop())
-        delete State.streams[uid]
-    })
-    State.users = {}
-    localStorage.removeItem('username')
-    State.ws?.send(JSON.stringify({ kind: 'logout' }))
-}
-
-messageForm.onsubmit = (e) => {
-    e?.preventDefault()
-    State.ws?.send(JSON.stringify({ kind: 'post', text: messageForm.message.value }))
-}
-
-userSettings.onchange = ({ targets }) => {
-    const settings = {
-        audio: userSettings.audio.checked,
-        video: userSettings.video.checked,
-        bars: userSettings.bars.checked,
-    }
-    // update local
-    Object.entries(settings).map(([key, value]) => localStorage.setItem(key, value))
-    // share
-    State.ws.send(JSON.stringify({ kind: 'settings', settings, targets }))
-}
-
-async function mylogin({ username }) {
+    const username = loginForm.username.value
+    localStorage.setItem('username', username)
     State.username = username
-    userSettings.audio.checked = localStorage.getItem('audio') !== 'false'
-    userSettings.video.checked = localStorage.getItem('video') !== 'false'
-    userSettings.bars.checked = localStorage.getItem('bars') !== 'false'
-    userSettings.onchange({})
 
+    const url = location.href.replace('http', 'ws')
+    State.ws = createWebSocket(url, username)
+
+    await startMyStream()
+}
+
+async function startMyStream() {
     const uid = crypto.randomUUID()
     const config = {
         audio: true,
@@ -135,85 +119,113 @@ async function mylogin({ username }) {
     }
     const stream = await navigator.mediaDevices.getUserMedia(config)
     State.streams[uid] = stream
-    State.streamId = uid
+    State.myUid = uid
+    userSettings.onchange()
 }
 
-function mysettings({ sender, settings }) {
-    if (State.users[sender]) {
-        Object.assign(State.users[sender], settings)
+async function createRpcConnection(username) {
+    'use strict'
+    const uid = crypto.randomUUID()
+    State.users[username] = { uid }
+    // test -- https://webrtc.github.io/samples/src/content/peerconnection/trickle-ice/
+    const config = {
+        iceServers: [
+            {
+                urls: [`stun:165.227.36.123:5349`, `turn:165.227.36.123:5349`],
+                username: 'roderic',
+                credential: 'tomodachi',
+            },
+        ],
     }
-}
+    const rpc = new RTCPeerConnection(config)
+    State.rpcs[uid] = rpc
 
-function myversion({ version }) {
-    if (State.version && State.version !== version) {
-        location.reload()
+    const stream = new MediaStream()
+    State.streams[uid] = stream
+    rpc.ontrack = (e) => {
+        stream.addTrack(e.track)
     }
-    else {
-        State.version = version
+    rpc.onicecandidate = ({ candidate }) => {
+        State.ws.send(JSON.stringify({ kind: 'icecandidate', targets: [username], candidate }))
     }
-}
-
-function myerror(data) {
-    State.errors.unshift(data)
-}
-
-function mypost(data) {
-    State.posts.unshift(data)
-}
-
-function myusers({ users }) {
-    const [additions, deletions] = diff(Object.keys(State.users), users)
-    for (user of additions) {
-        State.users[user] = {}
-        userSettings.onchange({ targets: [user] })
-        if (user !== State.username) {
-            rpcConnect(user)
-        }
+    rpc.onnegotiationneeded = async () => {
+        await rpc.setLocalDescription()
+        State.ws.send(JSON.stringify({ kind: 'offer', targets: [username], offer: rpc.localDescription }))
     }
-    for (user of deletions) {
-        delete State.users[user]
-    }
+
+    const myStream = State.streams[State.myUid]
+    myStream.getTracks().forEach(async (track) => { await rpc.addTrack(track) })
 }
 
-function mylogout() {
-    State.ws.close()
+async function wsicecandidate({ sender, candidate }) {
+    await State.rpcs[State.users[sender].uid].addIceCandidate(candidate)
 }
 
-if (localStorage.getItem('username')) {
-    loginForm.username.value = localStorage.getItem('username')
-    loginForm.onsubmit()
+async function wsleave({ username }) {
+    const { uid } = State.users[username]
+    State.rpcs[uid].close()
+    delete State.users[username]
 }
 
-async function myoffer({ sender, offer }) {
-    const rpc = State.rpcs[sender]
+async function wsenter({ username }) {
+    await createRpcConnection(username)
+}
+
+async function wsoffer({ sender, offer }) {
+    await createRpcConnection(sender)
+
+    const rpc = State.rpcs[State.users[sender].uid]
     await rpc.setRemoteDescription(offer)
+
     const answer = await rpc.createAnswer()
     await rpc.setLocalDescription(answer)
     State.ws.send(JSON.stringify({ kind: 'answer', targets: [sender], answer: rpc.localDescription }))
 }
 
-async function myanswer({ sender, answer }) {
-    const rpc = State.rpcs[sender]
+async function wsanswer({ sender, answer }) {
+    const rpc = State.rpcs[State.users[sender].uid]
     await rpc.setRemoteDescription(answer)
 }
 
-async function rpcConnect(user) {
-    const config = {iceServers: [{
-        // test -- https://webrtc.github.io/samples/src/content/peerconnection/trickle-ice/
-        urls: [`stun:165.227.36.123:5349`, `turn:165.227.36.123:5349`],
-        username: 'roderic',
-        credential: 'tomodachi',
-    }]}
-    const rpc = new RTCPeerConnection(config)
-    const stream = new MediaStream()
-    rpc.onnegotiationneeded = async (e) => {
-        await rpc.setLocalDescription()
-        State.ws.send(JSON.stringify({ kind: 'offer', targets: [user], offer: rpc.localDescription }))
+logoutForm.onsubmit = (e) => {
+    e?.preventDefault()
+    State.ws.close()
+    State.streams[State.myUid].getTracks().map(track => track.stop())
+    Object.values(State.rpcs).forEach(rpc => rpc.close())
+    State.username = ''
+    State.myUid = ''
+    localStorage.removeItem('username')
+}
+
+messageForm.onsubmit = (e) => {
+    e?.preventDefault()
+    State.ws?.send(JSON.stringify({ kind: 'post', text: messageForm.message.value }))
+}
+
+function wspost(data) {
+    State.posts.unshift(data)
+}
+
+userSettings.onchange = () => {
+    State.settings = {
+        audio: userSettings.audio.checked,
+        video: userSettings.video.checked,
+        bars: userSettings.bars.checked,
     }
-    rpc.onaddtrack = (e) => {
-        stream.addTrack(e.track)
-    }
-    State.streams[user] = stream
-    State.rpcs[user] = rpc
-    setTimeout(() => State.streams[State.streamId].getTracks().map((track) => rpc.addTrack(track)), 1000)
+    // update localStorage
+    Object.entries(State.settings).map(([key, value]) => localStorage.setItem(key, value))
+    // update stream
+    State.streams[State.myUid].getTracks().forEach(track => {
+        track.enabled = State.settings[track.kind]
+    })
+}
+
+function wserror(data) {
+    State.errors.unshift(data)
+}
+
+const known = localStorage.getItem('username')
+if (known) {
+    loginForm.username.value = known
+    loginForm.onsubmit()
 }

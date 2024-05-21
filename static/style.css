@@ -1,12 +1,11 @@
 #videos {
-    float: right;
     display: grid;
-    grid-gap: 1px;
+    grid-template-columns: 1fr 1fr 1fr;
 }
 video {
     background-color: black;
-    max-height: 300px;
-    max-width: 300px;
+    height: 100%;
+    width: 100%;
 }
 video.mirrored {
     transform: scaleX(-1);

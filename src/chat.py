@@ -19,32 +19,29 @@ async def broadcast(data):
 
 
 async def handle(websocket):
-    try:
-        await websocket.send(json.dumps({'kind': 'version', 'version': version}))
-        username = json.loads(await websocket.recv())['username']
-        if not username:
-            await websocket.send('Username cannot be blank')
-        elif username in online:
-            await websocket.send('Username taken')
-            username = None
-        else:
-            await websocket.send(json.dumps({'kind': 'login', 'username': username}))
+    username = json.loads(await websocket.recv())['username']
+    if not username:
+        await websocket.send('Username cannot be blank')
+    elif username in online:
+        await websocket.send('Username taken')
+        username = None
+
+    else:
+        try:
+
+            await broadcast({'kind': 'enter', 'username': username})
             online[username] = websocket
-            await broadcast({'kind': 'users', 'users': list(online)})
+
             async for message in websocket:
                 data = json.loads(message)
-                if data['kind'] == 'logout':
-                    await websocket.send(message)
-                    break
                 data['timestamp'] = datetime.datetime.now().isoformat()
                 data['sender'] = username
-                if data['kind'] in ['post', 'settings', 'offer', 'answer']:
-                    await broadcast(data)
-                else:
-                    await websocket.send(json.dumps({'kind': 'unhandled', 'data': data}))
-    finally:
-        online.pop(username, None)
-        await broadcast({'kind': 'users', 'users': list(online)})
+                await broadcast(data)
+
+        finally:
+
+            online.pop(username, None)
+            await broadcast({'kind': 'leave', 'username': username})
 
 
 async def main():
