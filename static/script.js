@@ -38,14 +38,15 @@ function diff(aa, bb) {
 function reFlow(videos) {
     const N = videos.childNodes.length
     let [X, Y] = [1, 1]
-    while (N > (X * Y)) {
+    while (N > X * Y) {
         if (X % 2 === Y % 2) {
             X += 1
         } else {
             Y += 1
         }
     }
-    if (videos.scrollHeight / videos.scrollWidth > 3 / 4) {
+    const { width, height } = videos.getBoundingClientRect()
+    if (height / width > 3 / 4) {
         [X, Y] = [Y, X]
     }
     videos.style.gridTemplateColumns = Array(X).fill('1fr').join(' ')
@@ -201,8 +202,8 @@ async function wsicecandidate({ sender, candidate }) {
 }
 
 async function wsleave({ username }) {
-    const { uid } = State.users[username]
-    State.rpcs[uid].close()
+    const uid = State.users[username]?.uid
+    State.rpcs[uid]?.close()
     delete State.users[username]
 }
 
