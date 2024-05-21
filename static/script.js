@@ -32,27 +32,51 @@ const renderRPCs = () => {
 
 function diff(aa, bb) {
     cc = [...new Set([...aa, ...bb])]
-    return [cc.filter(x => !aa.includes(x)), cc.filter(x => !bb.includes(x))]
+    return [cc, cc.filter(x => !aa.includes(x)), cc.filter(x => !bb.includes(x))]
 }
 
-const renderVideos = () => {
+function reFlow(videos) {
+    const N = videos.childNodes.length
+    let [X, Y] = [1, 1]
+    while (N > (X * Y)) {
+        if (X % 2 === Y % 2) {
+            X += 1
+        } else {
+            Y += 1
+        }
+    }
+    if (videos.scrollHeight / videos.scrollWidth > 3 / 4) {
+        [X, Y] = [Y, X]
+    }
+    videos.style.gridTemplateColumns = Array(X).fill('1fr').join(' ')
+    videos.style.gridTemplateRows = Array(Y).fill('1fr').join(' ')
+}
+
+function renderVideos() {
     const aa = [...document.querySelectorAll('video')].map(el => el.id)
     const bb = Object.entries(State.streams).filter(([k, v]) => v.active).map(([k, v]) => k)
-    const [additions, deletions] = diff(aa, bb)
+    const [total, additions, deletions] = diff(aa, bb)
 
     for (id of additions) {
         let video = document.createElement('video')
-        video.srcObject = State.streams[id]
         video.id = id
-        video.play()
+        video.setAttribute('playsinline', '')
+        video.setAttribute('autoplay', '')
+        video.srcObject = State.streams[id]
         video.muted = id === State.myUid
         video.classList.toggle('mirrored', id === State.myUid)
         videos.appendChild(video)
+    }
+    for (id of total) {
+        let video = document.getElementById(id)
+        video.style.objectFit = State.settings.bars ? 'contain' : 'cover'
     }
     for (id of deletions) {
         let video = document.getElementById(id)
         video.parentNode.removeChild(video)
     }
+
+    reFlow(videos)
 }
 
 setInterval(async () => {
@@ -105,10 +129,10 @@ loginForm.onsubmit = async (e) => {
     localStorage.setItem('username', username)
     State.username = username
 
+    await startMyStream()
+
     const url = location.href.replace('http', 'ws')
     State.ws = createWebSocket(url, username)
-
-    await startMyStream()
 }
 
 async function startMyStream() {

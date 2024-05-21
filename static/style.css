@@ -1,6 +1,22 @@
-#videos {
+body {
+    position: fixed;
+    width: 100vw;
+    height: 100vh;
+    overflow: hidden;
+    top: 0;
+    right: 0;
+    margin: 0;
+    padding: 0;
+
     display: grid;
-    grid-template-columns: 1fr 1fr 1fr;
+    grid-template-rows: auto 1fr;
+}
+#videos {
+    width: 100%;
+    height: 100%;
+    overflow: hidden;
+
+    display: grid;
 }
 video {
     background-color: black;
@@ -10,3 +26,4 @@ video {
 video.mirrored {
     transform: scaleX(-1);
 }
+
