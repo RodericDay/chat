@@ -270,6 +270,10 @@ messageForm.onpaste = (event) => {
     }
 }
 
+fileInput.oninput = (e) => {
+    [...e.target.files].forEach(doFileUpload)
+}
+
 const doFileUpload = async (file) => {
     const buffer = await file.arrayBuffer()
     Object.values(State.rpcs).forEach(async (rpc) => {
