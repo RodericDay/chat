@@ -262,7 +262,7 @@ messageForm.onsubmit = (e) => {
 }
 
 messageForm.onpaste = (event) => {
-    items = [...event.clipboardData.items].filter(item => item.type != 'text/plain')
+    items = [...event.clipboardData.items].filter(item => !item.type.includes('text/'))
     for(const item of items) {
         const file = item.getAsFile()
         doFileUpload(file)
