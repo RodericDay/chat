@@ -49,6 +49,12 @@ nav {
     display: grid;
     grid-template-rows: auto 1fr;
 }
+#messageForm {
+    margin: 0;
+    padding: 0;
+    display: grid;
+    grid-template-columns: 1fr auto;
+}
 #debug {
     position: fixed;
     top: 5vh;

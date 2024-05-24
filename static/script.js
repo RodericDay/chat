@@ -9,6 +9,7 @@ const State = Object.seal({
     errors: [],
     streams: {},
     rpcs: {},
+    dcs: {},
 })
 
 const renderWebsocket = (ws) => {
@@ -80,8 +81,15 @@ function renderVideos() {
     reFlow(videos)
 }
 
-function renderMessages() {
-    messages.textContent = State.posts.map(post => `${post.sender}: ${post.text}`).join('\n')
+function renderPosts() {
+    strings = State.posts.map(post => {
+        if (post.url) {
+            return `${post.sender}: <a href="${post.url}" download="${post.filename}">${post.filename}</a>`
+        } else {
+            return `${post.sender}: ${post.text}`
+        }
+    })
+    messages.innerHTML = strings.join('\n')  // unsafe, but needed until we figure out blob URLs
 }
 
 setInterval(() => {
@@ -103,7 +111,7 @@ setInterval(() => {
     userSettings.debug.checked = localStorage.getItem('debug') === 'true'
 
     renderVideos()
-    renderMessages()
+    renderPosts()
 
     toRender = {}
     toRender.ws = State.ws && renderWebsocket(State.ws)
@@ -188,13 +196,15 @@ async function createRpcConnection(username) {
     rpc.onicecandidate = ({ candidate }) => {
         State.ws.send(JSON.stringify({ kind: 'icecandidate', targets: [username], candidate }))
     }
-    rpc.onnegotiationneeded = async () => {
-        await rpc.setLocalDescription()
-        State.ws.send(JSON.stringify({ kind: 'offer', targets: [username], offer: rpc.localDescription }))
+    rpc.ondatachannel = ({ channel }) => {
+        rpc.dc = channel
+        rpc.dc.onmessage = onFileData(username)
     }
 
     const myStream = State.streams[State.myUid]
     myStream.getTracks().forEach(async (track) => { await rpc.addTrack(track) })
+
+    return rpc
 }
 
 async function wsicecandidate({ sender, candidate }) {
@@ -208,13 +218,15 @@ async function wsleave({ username }) {
 }
 
 async function wsenter({ username }) {
-    await createRpcConnection(username)
+    const rpc = await createRpcConnection(username)
+    rpc.dc = await rpc.createDataChannel('data')
+    rpc.dc.onmessage = onFileData(username)
+    await rpc.setLocalDescription()
+    State.ws.send(JSON.stringify({ kind: 'offer', targets: [username], offer: rpc.localDescription }))
 }
 
 async function wsoffer({ sender, offer }) {
-    await createRpcConnection(sender)
-
-    const rpc = State.rpcs[State.users[sender].uid]
+    const rpc = await createRpcConnection(sender)
     await rpc.setRemoteDescription(offer)
 
     const answer = await rpc.createAnswer()
@@ -242,6 +254,32 @@ messageForm.onsubmit = (e) => {
     if (!messageForm.message.value) return
     State.ws?.send(JSON.stringify({ kind: 'post', text: messageForm.message.value }))
     messageForm.message.value = ''
+}
+
+messageForm.onpaste = (event) => {
+    imageItems = [...event.clipboardData.items].filter(isImage)
+    for(const imageItem of imageItems) {
+        file = imageItem.getAsFile()
+        doFileUpload(file)
+        return false
+    }
+}
+
+const isImage = (item) => {
+    return item.type.includes('image')
+}
+
+const doFileUpload = async (file) => {
+    const buffer = await file.arrayBuffer()
+    Object.values(State.rpcs).map(rpc => {
+        rpc.dc.send(buffer)
+    })
+    onFileData(State.username)(buffer)
+}
+
+const onFileData = (sender) => ({ data }) => {
+    const blob = new Blob([data])
+    State.posts.unshift({ sender, url: URL.createObjectURL(blob), filename: 'dummy.png' })
 }
 
 function wspost(data) {
