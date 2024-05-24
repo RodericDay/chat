@@ -118,6 +118,8 @@ setInterval(() => {
     toRender.websockets = Object.fromEntries(Object.entries(State.websockets).map(([k, v]) => [k, renderWebsocket(v)]))
     toRender.streams = renderStreams()
     toRender.rpcs = renderRPCs()
+    toRender.buffer = State.buffer.length
+    toRender.local = localStorage
     debug.textContent = JSON.stringify(toRender, null, 2)
 
 }, 200)
