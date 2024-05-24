@@ -9,7 +9,7 @@ const State = Object.seal({
     errors: [],
     streams: {},
     rpcs: {},
-    buffers: [],
+    buffer: [],
 })
 
 const renderWebsocket = (ws) => {
@@ -84,7 +84,7 @@ function renderVideos() {
 function renderPosts() {
     strings = State.posts.map(post => {
         if (post.url) {
-            return `${post.sender}: <a target="_blank" href="${post.url}">download</a>`
+            return `${post.sender}: <a target="_blank" href="${post.url}" filename="${post.filename}">${post.filename}</a>`
         } else {
             return `${post.sender}: ${post.text}`
         }
@@ -198,7 +198,7 @@ async function createRpcConnection(username) {
     }
     rpc.ondatachannel = ({ channel }) => {
         rpc.dc = channel
-        rpc.dc.binaryType = 'blob'
+        rpc.dc.binaryType = 'arraybuffer'
         rpc.dc.onmessage = onFileData(username)
     }
 
@@ -221,7 +221,7 @@ async function wsleave({ username }) {
 async function wsenter({ username }) {
     const rpc = await createRpcConnection(username)
     rpc.dc = await rpc.createDataChannel('data')
-    rpc.dc.binaryType = 'blob'
+    rpc.dc.binaryType = 'arraybuffer'
 
     rpc.dc.onmessage = onFileData(username)
     await rpc.setLocalDescription()
@@ -260,29 +260,43 @@ messageForm.onsubmit = (e) => {
 }
 
 messageForm.onpaste = (event) => {
-    imageItems = [...event.clipboardData.items].filter(isImage)
-    for(const imageItem of imageItems) {
-        const file = imageItem.getAsFile()
+    items = [...event.clipboardData.items].filter(item => item.type != 'text/plain')
+    for(const item of items) {
+        const file = item.getAsFile()
         doFileUpload(file)
         return false
     }
 }
 
-const isImage = (item) => {
-    return item.type.includes('image')
-}
-
 const doFileUpload = async (file) => {
-    const data = new Blob([file.name, '\n', file.type, '\n', file.size, '\n', file])
-    Object.values(State.rpcs).map(rpc => rpc.dc.send(data))
-    onFileData(State.username)({ data })
+    const buffer = await file.arrayBuffer()
+    Object.values(State.rpcs).forEach(async (rpc) => {
+        const step = rpc.sctp.maxMessageSize
+        let ptr = 0
+        while ( ptr < buffer.byteLength ) {
+            await rpc.dc.send(buffer.slice(ptr, ptr + step))
+            ptr += step
+        }
+        await rpc.dc.send(JSON.stringify({ filename: file.name, filetype: file.type }))
+    })
+    onFileData(State.username)({ data: buffer })
+    onFileMetaData(State.username, file.name, file.type)
 }
 
 const onFileData = (sender) => async ({ data }) => {
-    const text = await data.text()
-    const [filename, filetype, filesize] = text.split('\n').slice(0, 3)
-    const file = new File([data.slice(data.size - filesize, data.size)], filename, { type: filetype })
-    State.posts.unshift({ sender, url: URL.createObjectURL(file) })
+    try {
+        const { filename, filetype } = JSON.parse(data)
+        onFileMetaData(sender, filename, filetype)
+    } catch(error) {
+        State.buffer.push(data)
+    }
+}
+
+const onFileMetaData = (sender, filename, filetype) => {
+    const obj = new File(State.buffer, filename, { type: filetype })
+    State.buffer = []
+    const url = URL.createObjectURL(obj)
+    State.posts.unshift({ sender, url, filename })
 }
 
 function wspost(data) {
