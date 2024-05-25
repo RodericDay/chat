@@ -1,131 +1,7 @@
-const State = Object.seal({
-    websockets: {},
-    ws: null,
-    username: '',
-    myUid: null,
-    settings: {},
-    users: {},
-    posts: [],
-    errors: [],
-    streams: {},
-    rpcs: {},
-    buffer: [],
-})
-
-const renderWebsocket = (ws) => {
-    const states = ['CONNECTING', 'OPEN', 'CLOSING', 'CLOSED', 'UNKNOWN']
-    return states[ws.readyState || 4]
-}
-
-const renderStreams = () => {
-    const entries = Object.entries(State.streams)
-        .filter(([k, v]) => v.active)
-        .map(([k, v]) => [k, Object.fromEntries(v.getTracks().map(({ kind, readyState }) => [kind, readyState]))])
-    return Object.fromEntries(entries)
-}
-
-const renderRPCs = () => {
-    const entries = Object.entries(State.rpcs)
-        .filter(([k, v]) => !['closed', 'failed'].includes(v.connectionState))
-        .map(([k, v]) => [k, [v.connectionState, v.iceConnectionState, v.iceGatheringState, v.signalingState].join(', ')])
-    return Object.fromEntries(entries)
-}
-
-function diff(aa, bb) {
-    cc = [...new Set([...aa, ...bb])]
-    return [cc, cc.filter(x => !aa.includes(x)), cc.filter(x => !bb.includes(x))]
-}
-
-function reFlow(videos) {
-    const N = videos.childNodes.length
-    let [X, Y] = [1, 1]
-    while (N > X * Y) {
-        if (X % 2 === Y % 2) {
-            X += 1
-        } else {
-            Y += 1
-        }
-    }
-    const { width, height } = videos.getBoundingClientRect()
-    if (height / width > 3 / 4) {
-        [X, Y] = [Y, X]
-    }
-    videos.style.gridTemplateColumns = Array(X).fill('1fr').join(' ')
-    videos.style.gridTemplateRows = Array(Y).fill('1fr').join(' ')
-}
-
-function renderVideos() {
-    const aa = [...document.querySelectorAll('video')].map(el => el.id)
-    const bb = Object.entries(State.streams).filter(([k, v]) => v.active).map(([k, v]) => k)
-    const [total, additions, deletions] = diff(aa, bb)
-
-    for (id of additions) {
-        let video = document.createElement('video')
-        video.id = id
-        video.setAttribute('playsinline', '')
-        video.setAttribute('autoplay', '')
-        video.srcObject = State.streams[id]
-        video.muted = id === State.myUid
-        video.classList.toggle('mirrored', id === State.myUid)
-        videos.appendChild(video)
-    }
-    for (id of total) {
-        let video = document.getElementById(id)
-        video.style.objectFit = State.settings.bars ? 'contain' : 'cover'
-    }
-    for (id of deletions) {
-        let video = document.getElementById(id)
-        video.parentNode.removeChild(video)
-    }
-
-    reFlow(videos)
-}
-
-function renderPosts() {
-    strings = State.posts.map(post => {
-        if (post.url) {
-            return `${post.sender}: <a target="_blank" href="${post.url}" filename="${post.filename}">${post.filename}</a>`
-        } else {
-            return `${post.sender}: ${post.text}`
-        }
-    })
-    messages.innerHTML = strings.join('\n')  // unsafe, but needed until we figure out blob URLs
-}
-
-setInterval(() => {
-
-    const count = Object.keys(State.users).length
-    document.title = 'Lab' + (count ? ` (${count})` : '')
-
-    loginForm.hidden = !!State.username
-    usernameDisplay.textContent = State.username
-    logoutForm.hidden = !State.username
-    userSettings.hidden = !State.username
-    chat.style.visibility = (State.username && State.settings.chat) ? 'unset' : 'hidden'
-    debug.style.visibility = State.settings.debug ? 'unset' : 'hidden'
-
-    userSettings.audio.checked = localStorage.getItem('audio') !== 'false'
-    userSettings.video.checked = localStorage.getItem('video') !== 'false'
-    userSettings.bars.checked = localStorage.getItem('bars') !== 'false'
-    userSettings.chat.checked = localStorage.getItem('chat') === 'true'
-    userSettings.debug.checked = localStorage.getItem('debug') === 'true'
-
-    renderVideos()
-    renderPosts()
-
-    toRender = {}
-    toRender.ws = State.ws && renderWebsocket(State.ws)
-    toRender.websockets = Object.fromEntries(Object.entries(State.websockets).map(([k, v]) => [k, renderWebsocket(v)]))
-    toRender.streams = renderStreams()
-    toRender.rpcs = renderRPCs()
-    toRender.buffer = State.buffer.length
-    toRender.local = localStorage
-    debug.textContent = JSON.stringify(toRender, null, 2)
-
-}, 200)
+import { State } from '/state.js'
+import { renderAll } from '/render.js'
 
 function createWebSocket(url, username) {
-    'use strict'
     const uid = crypto.randomUUID()
     const ws = new ReconnectingWebSocket(url)
     ws.onopen = () => {
@@ -142,7 +18,12 @@ function createWebSocket(url, username) {
             data = { kind: 'error', error, data }
             ws.close()
         }
-        const handler = window['ws' + data.kind] || console.log
+        let handler
+        try {
+            handler = eval('ws' + data.kind)
+        } catch {
+            handler = console.log
+        }
         handler(data)
     }
     State.websockets[uid] = ws
@@ -174,7 +55,6 @@ async function startMyStream() {
 }
 
 async function createRpcConnection(username) {
-    'use strict'
     const uid = crypto.randomUUID()
     State.users[username] = { uid }
     // test -- https://webrtc.github.io/samples/src/content/peerconnection/trickle-ice/
@@ -334,3 +214,4 @@ if (known) {
     loginForm.username.value = known
     loginForm.onsubmit()
 }
+setInterval(renderAll(State), 200)
