@@ -4,19 +4,17 @@
 <link rel="icon" href="/pico.png" type="image/x-icon" />
 <link rel="stylesheet" href="/style.css" />
 <meta name="viewport" content="width=device-width, initial-scale=.9, maximum-scale=.8">
+<script src="https://cdn.jsdelivr.net/npm/reconnecting-websocket@4.4.0/dist/reconnecting-websocket-iife.min.js"></script>
 <script src="https://unpkg.com/mithril/mithril.js"></script>
 <script type="module" src="/app.js" defer></script>
 <script>
 const State = Object.seal({
-    websockets: {},
-    ws: null,
-    myUid: null,
-    users: {},
+    myWs: null,
+    myStream: null,
+    peers: {},
     posts: [],
     errors: [],
-    streams: {},
-    rpcs: {},
-    buffer: [],
+    uploads: {},
 
     get username() { return localStorage.getItem('username') },
     set username(value) { localStorage.setItem('username', value) },

@@ -10,20 +10,20 @@ const Login = {
     },
     logOut: (e) => {
         e.preventDefault()
-        State.ws.close()
+        State.myWs.close()
     },
     logIn: async (e) => {
         e.preventDefault()
-        State.ws = await core.createWebSocket(e.target.username.value)
-        State.ws.addEventListener('open', m.redraw)
-        State.ws.addEventListener('message', m.redraw)
-        State.ws.addEventListener('close', m.redraw)
+        await core.startMyStream()
+        await core.createWebSocket(e.target.username.value)
+        State.myWs.addEventListener('open', m.redraw)
+        State.myWs.addEventListener('message', m.redraw)
+        State.myWs.addEventListener('close', m.redraw)
     },
-    view: () => State.ws
+    view: () => State.myWs
     ? m('form#logoutForm', { onsubmit: Login.logOut },
         m('span', State.username),
         m('button', 'log out'),
-        ['CONNECTING', 'OPEN', 'CLOSING', 'CLOSED', 'UNKNOWN'][State.ws.readyState || 4],
     )
     : m('form#loginForm', { onsubmit: Login.logIn },
         m('input[name=username][autocomplete=off]', { value: State.username }),
@@ -45,12 +45,11 @@ const CheckBox = {
 
 const Settings = {
     apply: (e) => {
-        const myStream = State.streams[State.myUid]
-        if (myStream) {
-            myStream.getTracks().forEach(track => { track.enabled = State[track.kind] })
+        if (State.myStream) {
+            State.myStream.getTracks().forEach(track => { track.enabled = State[track.kind] })
         }
     },
-    view: () => State.ws && m('form', { oncreate: Settings.apply, onupdate: Settings.apply },
+    view: () => State.myWs && m('form', { oncreate: Settings.apply, onupdate: Settings.apply },
         ['audio', 'video', 'bars', 'chat', 'debug'].map(name => m(CheckBox, { name }))
     ),
 }
@@ -62,9 +61,9 @@ const Nav = {
 const Video = {
     oncreate: ({ attrs, dom }) => {
         dom.autoplay = true
-        dom.muted = attrs.uid === State.myUid
-        dom.classList.toggle('mirrored', attrs.uid === State.myUid)
-        dom.srcObject = State.streams[attrs.uid]
+        dom.muted = attrs.self === true
+        dom.classList.toggle('mirrored', attrs.self === true)
+        dom.srcObject = attrs.stream
     },
     view: () => m('video[playsinline]', { style: { objectFit: State.bars ? 'contain' : 'cover' } })
 }
@@ -88,8 +87,20 @@ const Videos = {
         dom.style.gridTemplateRows = Array(Y).fill('1fr').join(' ')
     },
     view: () => m('#videos', { oncreate: Videos.reFlow, onupdate: Videos.reFlow },
-        Object.keys(State.streams).map(uid => m(Video, { key: uid, uid }))
+        State.myStream && m(Video, { self: true, stream: State.myStream }),
+        Object.values(State.peers).map(peer => m(Video, { key: peer.username, stream: peer.stream }))
     )
+}
+
+const Upload = {
+    view: ({ attrs }) => m('.upload',
+        attrs.finalSize
+        ? m('div',
+            m('div', attrs.name),
+            m('progress', { max: attrs.finalSize, value: attrs.size }),
+        )
+        : m('a', { target: '_blank', oncreate: ({ dom }) => { dom.href = URL.createObjectURL(attrs) } }, attrs.name),
+    ),
 }
 
 const Post = {
@@ -101,10 +112,11 @@ const Post = {
 
 const Chat = {
     onPaste: ({ clipboardData }) => {
-        items = [...clipboardData.items].filter(item => !item.type.includes('text/'))
+        const items = [...clipboardData.items].filter(item => !item.type.includes('text/'))
         for(const item of items) {
             const file = item.getAsFile()
             core.doFileUpload(file)
+            return false // don't leave string behind on input field
         }
     },
     onInput: (e) => {
@@ -113,12 +125,12 @@ const Chat = {
     onSubmit(e) {
         e.preventDefault()
         if (this.message.value) {
-            State.ws?.send(JSON.stringify({ kind: 'post', text: this.message.value }))
+            State.myWs?.send(JSON.stringify({ kind: 'post', text: this.message.value }))
             this.message.value = ''
         }
     },
     view() {
-        return State.ws && State.chat && m('#chat',
+        return State.myWs && State.chat && m('#chat',
             m('form#messageForm', { onsubmit: this.onSubmit },
                 m('input[name=message][autocomplete=off]', { onpaste: this.onPaste }),
                 m('button', 'post'),
@@ -126,13 +138,39 @@ const Chat = {
                     m('input#fileInput[type=file][hidden]', { oninput: this.onInput })
                 ),
             ),
-            m('#messages', State.posts.map(post => m(Post, post)))
+            m('#messages',
+                Object.values(State.uploads).map(upload => m(Upload, upload)),
+                State.posts.map(post => m(Post, post)),
+            )
         )
     }
 }
 
 const Debug = {
-    view: () => State.ws && State.debug && m('#debug', JSON.stringify(State, null, 2))
+    view: () => {
+        const renderStream = (stream) => {
+            return stream?.getTracks()
+                .map(track => track.kind)
+                .join(', ')
+        }
+        const renderRpc = (rpc) => ({
+            connectionState: rpc.connectionState,
+            iceConnectionState: rpc.iceConnectionState,
+            iceGatheringState: rpc.iceGatheringState,
+            signalingState: rpc.signalingState,
+        })
+        const toRender = {
+            myWs: ['CONNECTING', 'OPEN', 'CLOSING', 'CLOSED', null][State.myWs?.readyState || 4],
+            myStream: renderStream(State.myStream),
+            peers: Object.values(State.peers).map(peer => ({
+                username: peer.username,
+                rpc: renderRpc(peer.rpc),
+                stream: renderStream(peer.stream),
+            })),
+            uploads: Object.values(State.uploads).map(({ name, size, type }) => ({ name, size, type })),
+        }
+        return State.debug && m('#debug', JSON.stringify(toRender, null, 2))
+    }
 }
 
 const App = {
@@ -140,3 +178,4 @@ const App = {
 }
 
 m.mount(document.body, App)
+setInterval(m.redraw, 1000)

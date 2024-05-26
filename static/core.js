@@ -1,25 +1,9 @@
 async function createWebSocket(username) {
-    await startMyStream()
     const url = location.href.replace('http', 'ws')
     const uid = crypto.randomUUID()
-    const ws = new WebSocket(url)
+    const ws = new ReconnectingWebSocket(url)
     ws.onopen = async () => {
-        State.username = username
         ws.send(JSON.stringify({ kind: 'login', username }))
-    }
-    ws.onclose = () => {
-        delete State.websockets[uid]
-        State.ws = Object.values(State.websockets)[0]
-
-        if (!State.ws) {
-            State.streams[State.myUid].getTracks().forEach(track => track.stop())
-            State.streams = {}
-
-            Object.values(State.rpcs).map(rpc => rpc.close())
-            State.rpcs = {}
-
-            State.myUid = null
-        }
     }
     ws.onmessage = ({data}) => {
         try {
@@ -36,24 +20,18 @@ async function createWebSocket(username) {
         }
         handler(data)
     }
-    State.websockets[uid] = ws
-    return ws
+    State.myWs = ws
 }
 
 async function startMyStream() {
-    const uid = crypto.randomUUID()
     const config = {
         audio: true,
         video: {width: {ideal: 320}, facingMode: 'user', frameRate: 26}
     }
-    const stream = await navigator.mediaDevices.getUserMedia(config)
-    State.streams[uid] = stream
-    State.myUid = uid
+    State.myStream = await navigator.mediaDevices.getUserMedia(config)
 }
 
-async function createRpcConnection(username) {
-    const uid = crypto.randomUUID()
-    State.users[username] = { uid }
+async function createPeer(username, polite) {
     // test -- https://webrtc.github.io/samples/src/content/peerconnection/trickle-ice/
     const config = {
         iceServers: [
@@ -65,62 +43,69 @@ async function createRpcConnection(username) {
         ],
     }
     const rpc = new RTCPeerConnection(config)
-    State.rpcs[uid] = rpc
-
-    const stream = new MediaStream()
-    State.streams[uid] = stream
-    rpc.ontrack = (e) => {
-        stream.addTrack(e.track)
+    rpc.ontrack = ({ track, streams }) => {
+        stream.addTrack(track)
     }
     rpc.onicecandidate = ({ candidate }) => {
-        State.ws.send(JSON.stringify({ kind: 'icecandidate', targets: [username], candidate }))
+        State.myWs.send(JSON.stringify({ kind: 'icecandidate', targets: [username], candidate }))
     }
     rpc.ondatachannel = ({ channel }) => {
-        rpc.dc = channel
-        rpc.dc.binaryType = 'arraybuffer'
-        rpc.dc.onmessage = onFileData(username)
+        channel.binaryType = 'arraybuffer'
+        channel.onmessage = onFileData
+    }
+    rpc.onnegotiationneeded = async () => {
+        await rpc.setLocalDescription()
+        State.myWs.send(JSON.stringify({ kind: 'offer', targets: [username], offer: rpc.localDescription }))
     }
 
-    const myStream = State.streams[State.myUid]
-    myStream.getTracks().forEach(async (track) => { await rpc.addTrack(track) })
-
-    return rpc
+    const stream = new MediaStream()
+    return { username, rpc, stream, polite }
 }
 
 async function wsicecandidate({ sender, candidate }) {
-    await State.rpcs[State.users[sender].uid].addIceCandidate(candidate)
+    const { rpc } = State.peers[sender]
+    if (rpc.remoteDescription) {
+        await rpc.addIceCandidate(candidate)
+    }
 }
 
 async function wsenter({ username }) {
-    const rpc = await createRpcConnection(username)
-    rpc.dc = await rpc.createDataChannel('data')
-    rpc.dc.binaryType = 'arraybuffer'
+    State.peers[username] = await createPeer(username, false)
+    State.myWs.send(JSON.stringify({ kind: 'peer', targets: [username] }))
+    State.myStream.getTracks().forEach(track => State.peers[username].rpc.addTrack(track))
+}
 
-    rpc.dc.onmessage = onFileData(username)
-    await rpc.setLocalDescription()
-    State.ws.send(JSON.stringify({ kind: 'offer', targets: [username], offer: rpc.localDescription }))
+async function wspeer({ sender }) {
+    State.peers[sender] = await createPeer(sender, true)
+    State.myStream.getTracks().forEach(track => State.peers[sender].rpc.addTrack(track))
 }
 
 async function wsoffer({ sender, offer }) {
-    const rpc = await createRpcConnection(sender)
-    await rpc.setRemoteDescription(offer)
+    const { rpc, polite } = State.peers[sender]
+    if (rpc.signalingState === 'stable') {
+        await rpc.setRemoteDescription(offer)
+    } else if (polite) {
+        await Promise.all([
+            rpc.setLocalDescription({ type: 'rollback' }),
+            rpc.setRemoteDescription(offer),
+        ])
+    } else {
+        return
+    }
 
-    const answer = await rpc.createAnswer()
-    await rpc.setLocalDescription(answer)
-    State.ws.send(JSON.stringify({ kind: 'answer', targets: [sender], answer: rpc.localDescription }))
+    await rpc.setLocalDescription(await rpc.createAnswer())
+    State.myWs.send(JSON.stringify({ kind: 'answer', targets: [sender], answer: rpc.localDescription }))
 }
 
 async function wsanswer({ sender, answer }) {
-    const rpc = State.rpcs[State.users[sender].uid]
-    await rpc.setRemoteDescription(answer)
+    await State.peers[sender].rpc.setRemoteDescription(answer)
 }
 
 async function wsleave({ username }) {
-    const uid = State.users[username]?.uid
-    State.rpcs[uid]?.close()
-    delete State.rpcs[uid]
-    delete State.streams[uid]
-    delete State.users[username]
+    const { rpc, stream } = State.peers[username]
+    rpc.close()
+    stream.getTracks().forEach(track => track.stop())
+    delete State.peers[username]
 }
 
 function wspost(post) {
@@ -129,33 +114,37 @@ function wspost(post) {
 
 const doFileUpload = async (file) => {
     const buffer = await file.arrayBuffer()
-    Object.values(State.rpcs).forEach(async (rpc) => {
-        const step = rpc.sctp.maxMessageSize
-        let ptr = 0
-        while ( ptr < buffer.byteLength ) {
-            await rpc.dc.send(buffer.slice(ptr, ptr + step))
-            ptr += step
+    Object.values(State.peers).forEach(async ({ rpc }) => {
+        const meta = JSON.stringify({ name: file.name, type: file.type, size: buffer.byteLength })
+        const dc = await rpc.createDataChannel(meta)
+        const transmit = async () => {
+            const step = rpc.sctp.maxMessageSize
+            let ptr = 0
+            while ( ptr < buffer.byteLength ) {
+                await dc.send(buffer.slice(ptr, ptr + step))
+                ptr += step
+            }
         }
-        await rpc.dc.send(JSON.stringify({ filename: file.name, filetype: file.type }))
+        setTimeout(transmit, 1000)
     })
-    onFileData(State.username)({ data: buffer })
-    onFileMetaData(State.username, file.name, file.type)
+    State.uploads[file.name] = file
 }
 
-const onFileData = (sender) => async ({ data }) => {
-    try {
-        const { filename, filetype } = JSON.parse(data)
-        onFileMetaData(sender, filename, filetype)
-    } catch(error) {
-        State.buffer.push(data)
+const onFileData = ({ target, data }) => {
+    const channel = target
+    const { name, type, size } = JSON.parse(channel.label)
+
+    if (!State.uploads[name]) {
+        State.uploads[name] = { name, type, finalSize: size, buffer: [] }
+    }
+
+    const upload = State.uploads[name]
+    upload.buffer.push(data)
+    upload.size = upload.buffer.reduce((a, b) => a + b.byteLength, 0)
+    if (upload.size == upload.finalSize) {
+        State.uploads[name] = new File(upload.buffer, name, { type })
+        channel.close()
     }
 }
 
-const onFileMetaData = (sender, filename, filetype) => {
-    const obj = new File(State.buffer, filename, { type: filetype })
-    State.buffer = []
-    const url = URL.createObjectURL(obj)
-    State.posts.unshift({ sender, url, filename })
-}
-
-export { createWebSocket, doFileUpload }
+export { createWebSocket, startMyStream, doFileUpload }
