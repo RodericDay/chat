@@ -1,10 +1,9 @@
-import { State } from '/state.js'
-import { renderAll } from '/render.js'
-
-function createWebSocket(url, username) {
+function createWebSocket(username) {
+    const url = location.href.replace('http', 'ws')
     const uid = crypto.randomUUID()
     const ws = new ReconnectingWebSocket(url)
     ws.onopen = () => {
+        State.username = username
         ws.send(JSON.stringify({ kind: 'login', username }))
     }
     ws.onclose = () => {
@@ -30,18 +29,6 @@ function createWebSocket(url, username) {
     return ws
 }
 
-loginForm.onsubmit = async (e) => {
-    e?.preventDefault()
-    const username = loginForm.username.value
-    localStorage.setItem('username', username)
-    State.username = username
-
-    await startMyStream()
-
-    const url = location.href.replace('http', 'ws')
-    State.ws = createWebSocket(url, username)
-}
-
 async function startMyStream() {
     const uid = crypto.randomUUID()
     const config = {
@@ -51,7 +38,6 @@ async function startMyStream() {
     const stream = await navigator.mediaDevices.getUserMedia(config)
     State.streams[uid] = stream
     State.myUid = uid
-    userSettings.onchange()
 }
 
 async function createRpcConnection(username) {
@@ -94,12 +80,6 @@ async function wsicecandidate({ sender, candidate }) {
     await State.rpcs[State.users[sender].uid].addIceCandidate(candidate)
 }
 
-async function wsleave({ username }) {
-    const uid = State.users[username]?.uid
-    State.rpcs[uid]?.close()
-    delete State.users[username]
-}
-
 async function wsenter({ username }) {
     const rpc = await createRpcConnection(username)
     rpc.dc = await rpc.createDataChannel('data')
@@ -124,34 +104,16 @@ async function wsanswer({ sender, answer }) {
     await rpc.setRemoteDescription(answer)
 }
 
-logoutForm.onsubmit = (e) => {
-    e?.preventDefault()
-    State.ws.close()
-    State.streams[State.myUid].getTracks().map(track => track.stop())
-    Object.values(State.rpcs).forEach(rpc => rpc.close())
-    State.username = ''
-    State.myUid = ''
-    localStorage.removeItem('username')
+async function wsleave({ username }) {
+    const uid = State.users[username]?.uid
+    State.rpcs[uid]?.close()
+    delete State.rpcs[uid]
+    delete State.streams[uid]
+    delete State.users[username]
 }
 
-messageForm.onsubmit = (e) => {
-    e?.preventDefault()
-    if (!messageForm.message.value) return
-    State.ws?.send(JSON.stringify({ kind: 'post', text: messageForm.message.value }))
-    messageForm.message.value = ''
-}
-
-messageForm.onpaste = (event) => {
-    items = [...event.clipboardData.items].filter(item => !item.type.includes('text/'))
-    for(const item of items) {
-        const file = item.getAsFile()
-        doFileUpload(file)
-        return false
-    }
-}
-
-fileInput.oninput = (e) => {
-    [...e.target.files].forEach(doFileUpload)
+function wspost(post) {
+    State.posts.unshift(post)
 }
 
 const doFileUpload = async (file) => {
@@ -185,33 +147,4 @@ const onFileMetaData = (sender, filename, filetype) => {
     State.posts.unshift({ sender, url, filename })
 }
 
-function wspost(data) {
-    State.posts.unshift(data)
-}
-
-userSettings.onchange = () => {
-    State.settings = {
-        audio: userSettings.audio.checked,
-        video: userSettings.video.checked,
-        bars: userSettings.bars.checked,
-        chat: userSettings.chat.checked,
-        debug: userSettings.debug.checked,
-    }
-    // update localStorage
-    Object.entries(State.settings).map(([key, value]) => localStorage.setItem(key, value))
-    // update stream
-    State.streams[State.myUid].getTracks().forEach(track => {
-        track.enabled = State.settings[track.kind]
-    })
-}
-
-function wserror(data) {
-    State.errors.unshift(data)
-}
-
-const known = localStorage.getItem('username')
-if (known) {
-    loginForm.username.value = known
-    loginForm.onsubmit()
-}
-setInterval(renderAll(State), 200)
+export { createWebSocket, startMyStream, doFileUpload }

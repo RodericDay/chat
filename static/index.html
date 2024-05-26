@@ -5,45 +5,40 @@
 <link rel="stylesheet" href="/style.css" />
 <meta name="viewport" content="width=device-width, initial-scale=.9, maximum-scale=.8">
 <script src="https://cdn.jsdelivr.net/npm/reconnecting-websocket@4.4.0/dist/reconnecting-websocket-iife.min.js"></script>
-<script type="module" src="/script.js" defer></script>
+<script src="https://unpkg.com/mithril/mithril.js"></script>
+<script type="module" src="/app.js" defer></script>
+<script>
+const State = Object.seal({
+    websockets: {},
+    ws: null,
+    myUid: null,
+    users: {},
+    posts: [],
+    errors: [],
+    streams: {},
+    rpcs: {},
+    buffer: [],
+
+    get username() { return localStorage.getItem('username') },
+    set username(value) { localStorage.setItem('username', value) },
+
+    get audio() { return localStorage.getItem('audio') === 'true' },
+    set audio(value) { localStorage.setItem('audio', value) },
+
+    get video() { return localStorage.getItem('video') === 'true' },
+    set video(value) { localStorage.setItem('video', value) },
+
+    get bars() { return localStorage.getItem('bars') !== 'false' },
+    set bars(value) { localStorage.setItem('bars', value) },
+
+    get chat() { return localStorage.getItem('chat') === 'true' },
+    set chat(value) { localStorage.setItem('chat', value) },
+
+    get debug() { return localStorage.getItem('debug') === 'true' },
+    set debug(value) { localStorage.setItem('debug', value) },
+
+})
+</script>
 </head>
 
-<body>
-
-<nav>
-
-<form id="loginForm">
-    <input name="username" autocomplete="off" />
-    <button>log in</button>
-</form>
-
-<form id="logoutForm">
-    <span id="usernameDisplay"></span>
-    <button>log out</button>
-</form>
-
-<form id="userSettings">
-    <label><input name="audio" type="checkbox" />audio</label>
-    <label><input name="video" type="checkbox" />video</label>
-    <label><input name="bars" type="checkbox" />bars</label>
-    <label><input name="chat" type="checkbox" />chat</label>
-    <label><input name="debug" type="checkbox" />debug</label>
-</form>
-
-</nav>
-
-<div id="videos"></div>
-
-<div id="chat">
-    <form id="messageForm">
-        <input name="message" autocomplete="off" />
-        <button>post</button>
-        <label>📎<input id="fileInput" type="file" hidden /></label>
-    </form>
-    <div id="messages">
-    </div>
-</div>
-
-<div id="debug"></div>
-
-</body>
+<body></body>
