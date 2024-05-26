@@ -44,14 +44,27 @@ const CheckBox = {
 }
 
 const Settings = {
+    getScreen: async () => {
+        const stream = await navigator.mediaDevices.getDisplayMedia()
+        State.myWs.send(JSON.stringify({ kind: 'screen', screenId: stream.id }))
+        Object.values(State.peers).map(peer => stream.getTracks().map(track => peer.rpc.addTrack(track, stream)))
+    },
+    stopScreen: () => {
+        State.myWs.send(JSON.stringify({ kind: 'screen', streamId: null }))
+    },
     apply: (e) => {
         if (State.myStream) {
             State.myStream.getTracks().forEach(track => { track.enabled = State[track.kind] })
         }
     },
-    view: () => State.myWs && m('form', { oncreate: Settings.apply, onupdate: Settings.apply },
-        ['audio', 'video', 'bars', 'chat', 'debug'].map(name => m(CheckBox, { name }))
-    ),
+    view() {
+        return State.myWs && m('div', { oncreate: this.apply, onupdate: this.apply },
+            ['audio', 'video', 'bars', 'chat', 'debug'].map(name => m(CheckBox, { name })),
+            // State.streamId
+            // ? m('button', { onclick: this.stopScreen }, 'stop screenshare')
+            // : m('button', { onclick: this.getScreen }, 'start screenshare'),
+        )
+    },
 }
 
 const Nav = {
@@ -88,7 +101,8 @@ const Videos = {
     },
     view: () => m('#videos', { oncreate: Videos.reFlow, onupdate: Videos.reFlow },
         State.myStream && m(Video, { self: true, stream: State.myStream }),
-        Object.values(State.peers).map(peer => m(Video, { key: peer.username, stream: peer.stream }))
+        Object.values(State.peers)
+            .map(peer => peer.stream && m(Video, { key: peer.stream.id, stream: peer.stream }))
     )
 }
 

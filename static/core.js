@@ -44,7 +44,15 @@ async function createPeer(username, polite) {
     }
     const rpc = new RTCPeerConnection(config)
     rpc.ontrack = ({ track, streams }) => {
-        stream.addTrack(track)
+        for (const stream of streams) {
+            if (stream.id === State.screenId) {
+                State.screenStream = stream
+            } else if (!peer.stream || peer.stream.id === stream.id) {
+                peer.stream = stream
+            } else {
+                console.log('unknown', stream)
+            }
+        }
     }
     rpc.onicecandidate = ({ candidate }) => {
         State.myWs.send(JSON.stringify({ kind: 'icecandidate', targets: [username], candidate }))
@@ -58,8 +66,8 @@ async function createPeer(username, polite) {
         State.myWs.send(JSON.stringify({ kind: 'offer', targets: [username], offer: rpc.localDescription }))
     }
 
-    const stream = new MediaStream()
-    return { username, rpc, stream, polite }
+    const peer = { username, rpc, polite }
+    return peer
 }
 
 async function wsicecandidate({ sender, candidate }) {
@@ -72,12 +80,12 @@ async function wsicecandidate({ sender, candidate }) {
 async function wsenter({ username }) {
     State.peers[username] = await createPeer(username, false)
     State.myWs.send(JSON.stringify({ kind: 'peer', targets: [username] }))
-    State.myStream.getTracks().forEach(track => State.peers[username].rpc.addTrack(track))
+    State.myStream.getTracks().forEach(track => State.peers[username].rpc.addTrack(track, State.myStream))
 }
 
 async function wspeer({ sender }) {
     State.peers[sender] = await createPeer(sender, true)
-    State.myStream.getTracks().forEach(track => State.peers[sender].rpc.addTrack(track))
+    State.myStream.getTracks().forEach(track => State.peers[sender].rpc.addTrack(track, State.myStream))
 }
 
 async function wsoffer({ sender, offer }) {
@@ -106,6 +114,10 @@ async function wsleave({ username }) {
     rpc.close()
     stream.getTracks().forEach(track => track.stop())
     delete State.peers[username]
+}
+
+async function wsscreen({ screenId }) {
+    State.screenId = screenId
 }
 
 function wspost(post) {
