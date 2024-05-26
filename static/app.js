@@ -11,19 +11,10 @@ const Login = {
     logOut: (e) => {
         e.preventDefault()
         State.ws.close()
-
-        State.streams[State.myUid].getTracks().forEach(track => track.stop())
-        State.streams = {}
-
-        Object.values(State.rpcs).map(rpc => rpc.close())
-        State.rpcs = {}
-
-        State.myUid = null
     },
     logIn: async (e) => {
         e.preventDefault()
-        await core.startMyStream()
-        State.ws = core.createWebSocket(e.target.username.value)
+        State.ws = await core.createWebSocket(e.target.username.value)
         State.ws.addEventListener('open', m.redraw)
         State.ws.addEventListener('message', m.redraw)
         State.ws.addEventListener('close', m.redraw)
@@ -40,6 +31,18 @@ const Login = {
     ),
 }
 
+const CheckBox = {
+    onChange(event) {
+        State[this.name] = this.checked
+    },
+    view({ attrs: { name } }) {
+        return m('label',
+            m('input[type=checkbox]', { name, checked: State[name], onchange: this.onChange }),
+            name,
+        )
+    },
+}
+
 const Settings = {
     apply: (e) => {
         const myStream = State.streams[State.myUid]
@@ -47,15 +50,8 @@ const Settings = {
             myStream.getTracks().forEach(track => { track.enabled = State[track.kind] })
         }
     },
-    onchange: ({ target }) => {
-        ['audio', 'video', 'bars', 'chat', 'debug'].forEach(name => {
-            State[name] = target.form[name].checked
-        })
-    },
-    view: () => State.ws && m('form', { onchange: Settings.onchange, oncreate: Settings.apply, onupdate: Settings.apply },
-        ['audio', 'video', 'bars', 'chat', 'debug'].map(name =>
-            m('label', m('input[type=checkbox]', { name, checked: State[name] }), name),
-        )
+    view: () => State.ws && m('form', { oncreate: Settings.apply, onupdate: Settings.apply },
+        ['audio', 'video', 'bars', 'chat', 'debug'].map(name => m(CheckBox, { name }))
     ),
 }
 

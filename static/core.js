@@ -1,14 +1,25 @@
-function createWebSocket(username) {
+async function createWebSocket(username) {
+    await startMyStream()
     const url = location.href.replace('http', 'ws')
     const uid = crypto.randomUUID()
-    const ws = new ReconnectingWebSocket(url)
-    ws.onopen = () => {
+    const ws = new WebSocket(url)
+    ws.onopen = async () => {
         State.username = username
         ws.send(JSON.stringify({ kind: 'login', username }))
     }
     ws.onclose = () => {
         delete State.websockets[uid]
         State.ws = Object.values(State.websockets)[0]
+
+        if (!State.ws) {
+            State.streams[State.myUid].getTracks().forEach(track => track.stop())
+            State.streams = {}
+
+            Object.values(State.rpcs).map(rpc => rpc.close())
+            State.rpcs = {}
+
+            State.myUid = null
+        }
     }
     ws.onmessage = ({data}) => {
         try {
@@ -147,4 +158,4 @@ const onFileMetaData = (sender, filename, filetype) => {
     State.posts.unshift({ sender, url, filename })
 }
 
-export { createWebSocket, startMyStream, doFileUpload }
+export { createWebSocket, doFileUpload }
