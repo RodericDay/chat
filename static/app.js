@@ -65,12 +65,62 @@ const Nav = {
 
 const Video = {
     oncreate: ({ attrs, dom }) => {
+        dom.muted = State.myStream.id === attrs.stream.id
         dom.autoplay = true
-        dom.muted = attrs.self === true
-        dom.classList.toggle('mirrored', attrs.self === true)
         dom.srcObject = attrs.stream
     },
-    view: () => m('video[playsinline]', { style: { objectFit: State.bars ? 'contain' : 'cover' } })
+    view: ({ attrs }) => {
+        const style = {
+            transform: State.myStream.id === attrs.stream.id ? 'scaleX(-1)' : 'scaleX(1)',
+            width: '100%',
+            height: '100%',
+            objectFit: State.bars ? 'contain' : 'cover',
+        }
+        return m('video[playsinline]', { style })
+    }
+}
+
+const VideoContainer = {
+    view({ attrs }) {
+        let info = attrs.name
+        if (State.debug) {
+            const debug = {
+                name: attrs.name,
+                id: attrs.stream.id,
+                tracks: Object.fromEntries(attrs.stream.getTracks().map(track => [track.label, track.kind])),
+            }
+            if (attrs.ws) {
+                debug.ws = ['CONNECTING', 'OPEN', 'CLOSING', 'CLOSED', null][attrs.ws.readyState || 4]
+            }
+            if (attrs.rpc) {
+                debug.rpc = {
+                    connectionState: attrs.rpc.connectionState,
+                    iceConnectionState: attrs.rpc.iceConnectionState,
+                    iceGatheringState: attrs.rpc.iceGatheringState,
+                    signalingState: attrs.rpc.signalingState,
+                }
+            }
+            info = JSON.stringify(debug, null, 2)
+        }
+        const debugStyle = {
+            position: 'absolute',
+            top: 0,
+            color: 'limegreen',
+            backgroundColor: 'rgba(0, 0, 0, 0.5)',
+            transform: 'scaleX(1)',
+            fontSize: 'xx-small',
+            whiteSpace: 'pre-wrap',
+        }
+        const style = {
+            position: 'relative',
+            overflow: 'hidden',
+        }
+        const skip = attrs.name === 'screen' && State.sharedScreenIsLocal
+        return m('.video-container', { style },
+            skip ? undefined : m(Video, { stream: attrs.stream }),
+            m('pre', { style: debugStyle }, info),
+        )
+    },
 }
 
 const Videos = {
@@ -94,15 +144,22 @@ const Videos = {
     view: () => {
         const videos = []
         if(State.sharedScreen) {
-            videos.push(m(Video, { key: State.sharedScreen.id, stream: State.sharedScreen }))
+            videos.push({ name: 'screen', stream: State.sharedScreen })
         }
         if(State.myStream) {
-            videos.push(m(Video, { key: State.myStream.id, self: true, stream: State.myStream }))
+            videos.push({ name: State.username, stream: State.myStream, ws: State.myWs })
         }
         for (const peer of Object.values(State.peers)) {
-            videos.push(m(Video, { key: peer.stream.id, stream: peer.stream }))
+            videos.push({ name: peer.username, stream: peer.stream, rpc: peer.rpc })
         }
-        return m('#videos', { oncreate: Videos.reFlow, onupdate: Videos.reFlow }, videos)
+        const style = {
+            display: 'grid',
+            height: '100%',
+            overflow: 'hidden',
+            backgroundColor: 'black',
+        }
+        const children = videos.map(attrs => m(VideoContainer, { key: attrs.stream.id, ...attrs }))
+        return m('#videos', { style, oncreate: Videos.reFlow, onupdate: Videos.reFlow }, children)
     },
 }
 
@@ -125,6 +182,11 @@ const Post = {
 }
 
 const Chat = {
+    maybeDismiss(event) {
+        if (event.target === this) {
+            State.chat = false
+        }
+    },
     onPaste: ({ clipboardData }) => {
         const items = [...clipboardData.items].filter(item => !item.type.includes('text/'))
         for(const item of items) {
@@ -144,51 +206,36 @@ const Chat = {
         }
     },
     view() {
-        return State.myWs && State.chat && m('#chat',
-            m('form#messageForm', { onsubmit: this.onSubmit },
-                m('input[name=message][autocomplete=off]', { onpaste: this.onPaste }),
-                m('button', 'post'),
-                m('label', '📎',
-                    m('input#fileInput[type=file][hidden]', { oninput: this.onInput })
+        const style = {
+            position: 'fixed',
+            top: 0,
+            left: 0,
+            width: '100vw',
+            height: '100vh',
+            backgroundColor: 'rgba(0, 0, 0, 0.5)',
+        }
+        if (State.myWs && State.chat) {
+            return m('.dumbo', { style, onclick: this.maybeDismiss },
+                m('#chat',
+                    m('form', { onsubmit: this.onSubmit },
+                        m('input[name=message][autocomplete=off]', { onpaste: this.onPaste }),
+                        m('button', 'post'),
+                        m('label', '📎',
+                            m('input[type=file][hidden]', { oninput: this.onInput })
+                        ),
+                    ),
+                    m('#messages',
+                        Object.values(State.uploads).map(upload => m(Upload, upload)),
+                        State.posts.map(post => m(Post, post)),
+                    ),
                 ),
-            ),
-            m('#messages',
-                Object.values(State.uploads).map(upload => m(Upload, upload)),
-                State.posts.map(post => m(Post, post)),
             )
-        )
-    }
-}
-
-const Debug = {
-    view: () => {
-        const renderStream = (stream) => {
-            return stream?.getTracks()
-                .map(track => track.kind)
-                .join(', ')
         }
-        const renderRpc = (rpc) => ({
-            connectionState: rpc.connectionState,
-            iceConnectionState: rpc.iceConnectionState,
-            iceGatheringState: rpc.iceGatheringState,
-            signalingState: rpc.signalingState,
-        })
-        const toRender = {
-            myWs: ['CONNECTING', 'OPEN', 'CLOSING', 'CLOSED', null][State.myWs?.readyState || 4],
-            myStream: renderStream(State.myStream),
-            peers: Object.values(State.peers).map(peer => ({
-                username: peer.username,
-                rpc: renderRpc(peer.rpc),
-                stream: renderStream(peer.stream),
-            })),
-            uploads: Object.values(State.uploads).map(({ name, size, type }) => ({ name, size, type })),
-        }
-        return State.debug && m('#debug', JSON.stringify(toRender, null, 2))
     }
 }
 
 const App = {
-    view: () => [m(Nav), m(Videos), m(Chat), m(Debug)]
+    view: () => [m(Nav), m(Videos), m(Chat)]
 }
 
 m.mount(document.body, App)
