@@ -43,30 +43,32 @@ async function createPeer(username, polite) {
         ],
     }
     const rpc = new RTCPeerConnection(config)
-    rpc.ontrack = ({ track, streams }) => {
-        for (const stream of streams) {
-            if (stream.id === State.screenId) {
-                State.screenStream = stream
-            } else if (!peer.stream || peer.stream.id === stream.id) {
-                peer.stream = stream
-            } else {
-                console.log('unknown', stream)
-            }
-        }
+    rpc.onnegotiationneeded = async () => {
+        await rpc.setLocalDescription()
+        State.myWs.send(JSON.stringify({ kind: 'offer', targets: [username], offer: rpc.localDescription }))
     }
     rpc.onicecandidate = ({ candidate }) => {
         State.myWs.send(JSON.stringify({ kind: 'icecandidate', targets: [username], candidate }))
+    }
+    rpc.ontrack = ({ track, streams }) => {
+        // overloading meaning: if stream is specified, assume it is not the generic stream
+        if (streams.length) {
+            State.sharedScreen = streams[0]
+        } else {
+            peer.stream.addTrack(track)
+        }
     }
     rpc.ondatachannel = ({ channel }) => {
         channel.binaryType = 'arraybuffer'
         channel.onmessage = onFileData
     }
-    rpc.onnegotiationneeded = async () => {
-        await rpc.setLocalDescription()
-        State.myWs.send(JSON.stringify({ kind: 'offer', targets: [username], offer: rpc.localDescription }))
-    }
 
-    const peer = { username, rpc, polite }
+    const peer = Object.seal({
+        username,
+        rpc,
+        polite,
+        stream: new MediaStream(),
+    })
     return peer
 }
 
@@ -80,12 +82,15 @@ async function wsicecandidate({ sender, candidate }) {
 async function wsenter({ username }) {
     State.peers[username] = await createPeer(username, false)
     State.myWs.send(JSON.stringify({ kind: 'peer', targets: [username] }))
-    State.myStream.getTracks().forEach(track => State.peers[username].rpc.addTrack(track, State.myStream))
+    State.myStream.getTracks().forEach(track => State.peers[username].rpc.addTrack(track))
+    if (State.sharedScreenIsLocal) {
+        State.sharedScreen.getTracks().forEach(track => State.peers[username].rpc.addTrack(track, State.sharedScreen))
+    }
 }
 
 async function wspeer({ sender }) {
     State.peers[sender] = await createPeer(sender, true)
-    State.myStream.getTracks().forEach(track => State.peers[sender].rpc.addTrack(track, State.myStream))
+    State.myStream.getTracks().forEach(track => State.peers[sender].rpc.addTrack(track))
 }
 
 async function wsoffer({ sender, offer }) {
@@ -114,10 +119,6 @@ async function wsleave({ username }) {
     rpc.close()
     stream.getTracks().forEach(track => track.stop())
     delete State.peers[username]
-}
-
-async function wsscreen({ screenId }) {
-    State.screenId = screenId
 }
 
 function wspost(post) {
@@ -159,4 +160,18 @@ const onFileData = ({ target, data }) => {
     }
 }
 
-export { createWebSocket, startMyStream, doFileUpload }
+const startSharingScreen = async () => {
+    State.sharedScreen = await navigator.mediaDevices.getDisplayMedia()
+    State.sharedScreen.getTracks().forEach(track => Object.values(State.peers).forEach(({ rpc }) => rpc.addTrack(track, State.sharedScreen)))
+}
+
+const stopSharingScreen = () => {
+    State.myWs.send(JSON.stringify({ kind: 'stopscreen' }))
+}
+
+const wsstopscreen = () => {
+    State.sharedScreen.getTracks().forEach(track => track.stop())
+    State.sharedScreen = null
+}
+
+export { createWebSocket, startMyStream, doFileUpload, startSharingScreen, stopSharingScreen }

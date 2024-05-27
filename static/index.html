@@ -11,11 +11,15 @@
 const State = Object.seal({
     myWs: null,
     myStream: null,
-    screenId: null,
+    sharedScreen: null,
     peers: {},
     posts: [],
     errors: [],
     uploads: {},
+
+    get sharedScreenIsLocal() {
+        return !!this.sharedScreen?.getTracks().every(track => !track.label.includes('remote'))
+    },
 
     get username() { return localStorage.getItem('username') },
     set username(value) { localStorage.setItem('username', value) },
