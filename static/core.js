@@ -1,4 +1,5 @@
 async function createWebSocket(username) {
+    State.username = username
     const url = location.href.replace('http', 'ws')
     const uid = crypto.randomUUID()
     const ws = new ReconnectingWebSocket(url)

@@ -1,18 +1,33 @@
 import * as core from '/core.js'
 
 const Login = {
-    oncreate: (e) => {
+    oncreate({ dom }) {
         // maybe auto-login
         if (State.username) {
-            e.dom.username.value = State.username
-            Login.logIn({ preventDefault: () => {}, target: e.dom })
+            dom.username.value = State.username
+            Login.logIn({ preventDefault: () => {}, target: dom })
         }
     },
-    logOut: (e) => {
+    logOut(e) {
         e.preventDefault()
-        State.myWs.close()
+        State.username = ''
+
+        State.myWs?.close()
+        State.myWs = undefined
+
+        State.myStream?.getTracks().map(track => track.stop())
+        State.myStream = undefined
+
+        State.sharedScreen?.getTracks().map(track => track.stop())
+        State.sharedScreen = undefined
+
+        Object.values(State.peers).map(({ rpc, stream }) => {
+            stream.getTracks().map(track => track.stop())
+            rpc.close()
+        })
+        State.peers = {}
     },
-    logIn: async (e) => {
+    async logIn(e) {
         e.preventDefault()
         await core.startMyStream()
         await core.createWebSocket(e.target.username.value)
@@ -20,15 +35,12 @@ const Login = {
         State.myWs.addEventListener('message', m.redraw)
         State.myWs.addEventListener('close', m.redraw)
     },
-    view: () => State.myWs
-    ? m('form#logoutForm', { onsubmit: Login.logOut },
-        m('span', State.username),
-        m('button', 'log out'),
-    )
-    : m('form#loginForm', { onsubmit: Login.logIn },
-        m('input[name=username][autocomplete=off]', { value: State.username }),
-        m('button', 'log in'),
-    ),
+    view() {
+        return m('form', { onsubmit: State.myWs ? this.logOut : this.logIn },
+            m('input[name=username][autocomplete=off]', { style: { width: '70px' }, disabled: !!State.myWs }),
+            m('button', State.myWs ? 'log out' : 'log in'),
+        )
+    }
 }
 
 const CheckBox = {
@@ -53,8 +65,8 @@ const Settings = {
         return State.myWs && m('div', { oncreate: this.apply, onupdate: this.apply },
             ['audio', 'video', 'bars', 'chat', 'debug'].map(name => m(CheckBox, { name })),
             State.sharedScreen
-            ? m('button', { onclick: core.stopSharingScreen }, 'stop screenshare')
-            : m('button', { onclick: core.startSharingScreen }, 'start screenshare'),
+            ? m('button', { onclick: core.stopSharingScreen }, 'stop screen')
+            : m('button', { onclick: core.startSharingScreen }, 'start screen'),
         )
     },
 }
