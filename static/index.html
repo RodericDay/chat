@@ -15,7 +15,6 @@ const State = Object.seal({
     peers: {},
     posts: [],
     errors: [],
-    uploads: {},
 
     get sharedScreenIsLocal() {
         return !!this.sharedScreen?.getTracks().every(track => !track.label.includes('remote'))

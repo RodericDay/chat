@@ -112,6 +112,9 @@ const VideoContainer = {
                     signalingState: attrs.rpc.signalingState,
                 }
             }
+            if (attrs.fileTransfers) {
+                debug.fileTransfers = attrs.fileTransfers.map(ft => ft.render())
+            }
             info = JSON.stringify(debug, null, 2)
         }
         const debugStyle = {
@@ -159,10 +162,10 @@ const Videos = {
             videos.push({ name: 'screen', stream: State.sharedScreen })
         }
         if(State.myStream) {
-            videos.push({ name: State.username, stream: State.myStream, ws: State.myWs })
+            videos.push({ name: State.username, stream: State.myStream, ws: State.myWs, })
         }
         for (const peer of Object.values(State.peers)) {
-            videos.push({ name: peer.username, stream: peer.stream, rpc: peer.rpc })
+            videos.push({ name: peer.username, stream: peer.stream, rpc: peer.rpc, fileTransfers: peer.fileTransfers })
         }
         const style = {
             display: 'grid',
@@ -173,17 +176,6 @@ const Videos = {
         const children = videos.map(attrs => m(VideoContainer, { key: attrs.stream.id, ...attrs }))
         return m('#videos', { style, oncreate: Videos.reFlow, onupdate: Videos.reFlow }, children)
     },
-}
-
-const Upload = {
-    view: ({ attrs }) => m('.upload',
-        attrs.finalSize
-        ? m('div',
-            m('div', attrs.name),
-            m('progress', { max: attrs.finalSize, value: attrs.size }),
-        )
-        : m('a', { target: '_blank', oncreate: ({ dom }) => { dom.href = URL.createObjectURL(attrs) } }, attrs.name),
-    ),
 }
 
 const Post = {
@@ -237,7 +229,6 @@ const Chat = {
                         ),
                     ),
                     m('#messages',
-                        Object.values(State.uploads).map(upload => m(Upload, upload)),
                         State.posts.map(post => m(Post, post)),
                     ),
                 ),

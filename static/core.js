@@ -60,8 +60,10 @@ async function createPeer(username, polite) {
         }
     }
     rpc.ondatachannel = ({ channel }) => {
+        const fileTransfer = new FileTransfer(channel.label)
+        peer.fileTransfers.push(fileTransfer)
         channel.binaryType = 'arraybuffer'
-        channel.onmessage = onFileData
+        channel.onmessage = ({ target, data }) => onFileData(target, fileTransfer, data)
     }
 
     const peer = Object.seal({
@@ -69,8 +71,21 @@ async function createPeer(username, polite) {
         rpc,
         polite,
         stream: new MediaStream(),
+        fileTransfers: [],
     })
     return peer
+}
+
+function FileTransfer(label) {
+    const { name, size, type } = JSON.parse(label)
+    return {
+        name,
+        size,
+        type,
+        buffer: [],
+        get curSize() { return this.buffer.reduce((a, b) => a + b.byteLength, 0) },
+        render() { return `${this.name} (${this.curSize}/${this.size})` },
+    }
 }
 
 async function wsicecandidate({ sender, candidate }) {
@@ -128,37 +143,31 @@ function wspost(post) {
 
 const doFileUpload = async (file) => {
     const buffer = await file.arrayBuffer()
-    Object.values(State.peers).forEach(async ({ rpc }) => {
-        const meta = JSON.stringify({ name: file.name, type: file.type, size: buffer.byteLength })
-        const dc = await rpc.createDataChannel(meta)
-        const transmit = async () => {
+    Object.values(State.peers).forEach(async ({ rpc, fileTransfers }) => {
+        const label = JSON.stringify({ name: file.name, type: file.type, size: buffer.byteLength })
+        const fileTransfer = new FileTransfer(label)
+        fileTransfers.push(fileTransfer)
+        const dc = await rpc.createDataChannel(label)
+        dc.onopen = async () => {
             const step = rpc.sctp.maxMessageSize
             let ptr = 0
             while ( ptr < buffer.byteLength ) {
-                await dc.send(buffer.slice(ptr, ptr + step))
+                const data = buffer.slice(ptr, ptr + step)
+                await dc.send(data)
+                onFileData(dc, fileTransfer, data)
                 ptr += step
             }
         }
-        setTimeout(transmit, 1000)
     })
-    State.uploads[file.name] = file
 }
 
-const onFileData = ({ target, data }) => {
-    const channel = target
-    const { name, type, size } = JSON.parse(channel.label)
-
-    if (!State.uploads[name]) {
-        State.uploads[name] = { name, type, finalSize: size, buffer: [] }
+const onFileData = (channel, fileTransfer, data) => {
+    fileTransfer.buffer.push(data)
+    if (fileTransfer.size === fileTransfer.curSize) {
+        const file = new File(fileTransfer.buffer, fileTransfer.name, { type: fileTransfer.type })
+        console.log(URL.createObjectURL(file))
     }
-
-    const upload = State.uploads[name]
-    upload.buffer.push(data)
-    upload.size = upload.buffer.reduce((a, b) => a + b.byteLength, 0)
-    if (upload.size == upload.finalSize) {
-        State.uploads[name] = new File(upload.buffer, name, { type })
-        channel.close()
-    }
+    m.redraw()
 }
 
 const startSharingScreen = async () => {
