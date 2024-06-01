@@ -179,10 +179,25 @@ const Videos = {
 }
 
 const Post = {
-    view: ({ attrs }) => m('.post', m('b.sender', attrs.sender + ': '), attrs.url
-        ? m('a', { target: '_blank', href: attrs.url }, attrs.filename)
-        : m('span.text', attrs.text)
-    ),
+    mapping: new Map([
+        [/-->/g, '→'],
+        [/</g, '&lt;'],
+        [/>/g, '&gt;'],
+        [/\n+/g, `<br/>`],
+        [/(\*.+\*)/g, (_, a) => `<b>${a}</b>`],
+        [/(_.+_)/g, (_, a) => `<i>${a}</i>`],
+        [/\[([^\]]+)\]\((https?:\/\/\S+?)\)/g, (_, a, b) => `<a target="blank_" href="${b}">${a}</a>`],
+    ]),
+    escape(string) {
+        return [...this.mapping.entries()].reduce((string, [pattern, rep]) => string.replace(pattern, rep), string)
+    },
+    oncreate({ dom, attrs }) {
+        const escaped = this.escape(attrs.text)
+        dom.innerHTML = `<b>${ attrs.sender }</b>: ${ escaped }`
+    },
+    view({ attrs }) {
+        return m('.post')
+    },
 }
 
 const Chat = {
