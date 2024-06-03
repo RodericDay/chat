@@ -43,15 +43,20 @@ const Login = {
     }
 }
 
-const CheckBox = {
-    onChange(event) {
-        State[this.name] = this.checked
+const ToggleSetting = {
+    toggle(name) {
+        return (event) => { State[name] = !State[name] }
     },
-    view({ attrs: { name } }) {
-        return m('label',
-            m('input[type=checkbox]', { name, checked: State[name], onchange: this.onChange }),
-            name,
-        )
+    view({ attrs: { name, image, isOn, toggleFn } }) {
+        isOn = isOn || State[name]
+        toggleFn = toggleFn || this.toggle(name)
+        const style = {
+            width: '20px',
+            height: '20px',
+            filter: 'grayscale(1)',
+            opacity: isOn ? 1 : 0.2,
+        }
+        return m('img', { onclick: toggleFn, src: image, alt: name, style })
     },
 }
 
@@ -62,11 +67,15 @@ const Settings = {
         }
     },
     view() {
+        const isOn = !!State.sharedScreen
+        const toggleFn = isOn ? core.stopSharingScreen : core.startSharingScreen
         return State.myWs && m('div', { oncreate: this.apply, onupdate: this.apply },
-            ['audio', 'video', 'bars', 'chat', 'debug'].map(name => m(CheckBox, { name })),
-            State.sharedScreen
-            ? m('button', { onclick: core.stopSharingScreen }, 'stop screen')
-            : m('button', { onclick: core.startSharingScreen }, 'start screen'),
+            m(ToggleSetting, { name: 'audio', image: '/svg/microphone.svg' }),
+            m(ToggleSetting, { name: 'video', image: '/svg/camera.svg' }),
+            m(ToggleSetting, { name: 'bars', image: '/svg/cards.svg' }),
+            m(ToggleSetting, { name: 'chat', image: '/svg/chat.svg' }),
+            m(ToggleSetting, { name: 'debug', image: '/svg/gear.svg' }),
+            m(ToggleSetting, { name: 'screen', image: '/svg/screen.svg', isOn, toggleFn }),
         )
     },
 }
@@ -186,7 +195,7 @@ const Post = {
         [/\n+/g, `<br/>`],
         [/(\*.+\*)/g, (_, a) => `<b>${a}</b>`],
         [/(_.+_)/g, (_, a) => `<i>${a}</i>`],
-        [/\[([^\]]+)\]\((https?:\/\/\S+?)\)/g, (_, a, b) => `<a target="blank_" href="${b}">${a}</a>`],
+        [/\[([^\]]+)\]\((blob:\S+?)\)/g, (_, a, b) => `<a target="blank_" href="${b}">${a}</a>`],
     ]),
     escape(string) {
         return [...this.mapping.entries()].reduce((string, [pattern, rep]) => string.replace(pattern, rep), string)

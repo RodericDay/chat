@@ -138,7 +138,7 @@ async function wsleave({ username }) {
 }
 
 function wspost(post) {
-    State.posts.unshift(post)
+    State.posts.push(post)
 }
 
 const doFileUpload = async (file) => {
@@ -165,9 +165,14 @@ const onFileData = (channel, fileTransfer, data) => {
     fileTransfer.buffer.push(data)
     if (fileTransfer.size === fileTransfer.curSize) {
         const file = new File(fileTransfer.buffer, fileTransfer.name, { type: fileTransfer.type })
-        console.log(URL.createObjectURL(file))
+        onFullFile(file)
     }
     m.redraw()
+}
+
+const onFullFile = (file) => {
+    const blobUrl = URL.createObjectURL(file)
+    State.posts.push({ sender: 'server', text: `[${ file.name }](${ blobUrl })` })
 }
 
 const startSharingScreen = async () => {
