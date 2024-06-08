@@ -70,7 +70,7 @@ const Nav = {
         const toggleFn = isOn ? core.stopSharingScreen : core.startSharingScreen
         const style = {
             display: 'flex',
-            height: '2em',
+            width: '100dvw',
         }
         const spacer = m('.spacer', { style: { flex: 1 }})
         const loggedInOnly = []
@@ -182,7 +182,6 @@ const Videos = {
         }
         const style = {
             display: 'grid',
-            height: '100%',
             overflow: 'hidden',
             backgroundColor: 'black',
         }
@@ -238,30 +237,37 @@ const Chat = {
         }
     },
     view() {
-        const style = {
+        const backgroundStyle = {
             position: 'fixed',
-            top: 0,
             left: 0,
-            width: '100vw',
-            height: '100vh',
+            height: '100dvh',
             backgroundColor: 'rgba(0, 0, 0, 0.5)',
+            width: '50dvw',
         }
-        if (State.myWs && State.chat) {
-            return m('.dumbo', { style, onclick: this.maybeDismiss },
-                m('#chat',
-                    m('form', { onsubmit: this.onSubmit },
-                        m('input[name=message][autocomplete=off]', { onpaste: this.onPaste }),
-                        m('button', 'post'),
-                        m('label', '📎',
-                            m('input[type=file][hidden]', { oninput: this.onInput })
-                        ),
-                    ),
-                    m('#messages',
-                        State.posts.map(post => m(Post, post)),
+        const foregroundStyle = {
+            width: '50dvw', // coordinate with above
+            overflow: 'scroll',
+            backgroundColor: 'white',
+            fontFamily: 'monospace',
+            whiteSpace: 'pre-wrap',
+            display: 'grid',
+            gridTemplateRows: 'auto 1fr',
+        }
+        return [
+            m('.chatBackground', { style: backgroundStyle, onclick: this.maybeDismiss }),
+            m('.chatForeground', { style: foregroundStyle },
+                m('form', { onsubmit: this.onSubmit },
+                    m('input[name=message][autocomplete=off]', { onpaste: this.onPaste }),
+                    m('button', 'post'),
+                    m('label', '📎',
+                        m('input[type=file][hidden]', { oninput: this.onInput })
                     ),
                 ),
-            )
-        }
+                m('#messages',
+                    State.posts.map(post => m(Post, post)),
+                ),
+            ),
+        ]
     }
 }
 
@@ -271,7 +277,28 @@ const App = {
         if (State.myStream) {
             State.myStream.getTracks().forEach(track => { track.enabled = State[track.kind] })
         }
-        return [m(Nav), m(Videos), m(Chat)]
+        const appStyle = {
+            position: 'fixed',
+            top: 0,
+            left: 0,
+            width: '100dvw',
+            height: '100dvh',
+            display: 'grid',
+            gridTemplateRows: '2em calc(100dvh - 2em)',
+            overflow: 'hidden',
+        }
+        const mainStyle = {
+            display: 'grid',
+            width: '100dvw',
+            gridTemplateColumns: State.chat ? '50dvw 50dvw' : '100dvw',
+        }
+        return m('.app', { style: appStyle },
+            m(Nav),
+            State.myWs && m('main', { style: mainStyle },
+                m(Videos),
+                State.chat && m(Chat)
+            )
+        )
     }
 }
 
