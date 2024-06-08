@@ -29,11 +29,14 @@ const Login = {
     },
     async logIn(e) {
         e.preventDefault()
-        await core.startMyStream()
-        await core.createWebSocket(e.target.username.value)
-        State.myWs.addEventListener('open', m.redraw)
-        State.myWs.addEventListener('message', m.redraw)
-        State.myWs.addEventListener('close', m.redraw)
+        const username = e.target.username.value.trim()
+        if (username) {
+            await core.startMyStream()
+            await core.createWebSocket(username)
+            State.myWs.addEventListener('open', m.redraw)
+            State.myWs.addEventListener('message', m.redraw)
+            State.myWs.addEventListener('close', m.redraw)
+        }
     },
     view() {
         const style = {
