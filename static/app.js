@@ -36,9 +36,14 @@ const Login = {
         State.myWs.addEventListener('close', m.redraw)
     },
     view() {
+        const style = {
+            height: '100%',
+            border: '0',
+            padding: '0 1em',
+        }
         return m('form', { onsubmit: State.myWs ? this.logOut : this.logIn },
-            m('input[name=username][autocomplete=off]', { style: { width: '70px' }, disabled: !!State.myWs }),
-            m('button', State.myWs ? 'log out' : 'log in'),
+            m('input[name=username][autocomplete=off]', { style , disabled: !!State.myWs }),
+            m('button', { style }, State.myWs ? 'log out' : 'log in'),
         )
     }
 }
@@ -51,8 +56,7 @@ const ToggleSetting = {
         isOn = isOn || State[name]
         toggleFn = toggleFn || this.toggle(name)
         const style = {
-            width: '20px',
-            height: '20px',
+            height: '100%',
             filter: 'grayscale(1)',
             opacity: isOn ? 1 : 0.2,
         }
@@ -60,28 +64,28 @@ const ToggleSetting = {
     },
 }
 
-const Settings = {
-    apply: (e) => {
-        if (State.myStream) {
-            State.myStream.getTracks().forEach(track => { track.enabled = State[track.kind] })
-        }
-    },
+const Nav = {
     view() {
         const isOn = !!State.sharedScreen
         const toggleFn = isOn ? core.stopSharingScreen : core.startSharingScreen
-        return State.myWs && m('div', { oncreate: this.apply, onupdate: this.apply },
-            m(ToggleSetting, { name: 'audio', image: '/svg/microphone.svg' }),
-            m(ToggleSetting, { name: 'video', image: '/svg/camera.svg' }),
-            m(ToggleSetting, { name: 'bars', image: '/svg/cards.svg' }),
-            m(ToggleSetting, { name: 'chat', image: '/svg/chat.svg' }),
-            m(ToggleSetting, { name: 'debug', image: '/svg/gear.svg' }),
-            m(ToggleSetting, { name: 'screen', image: '/svg/screen.svg', isOn, toggleFn }),
-        )
-    },
-}
-
-const Nav = {
-    view: () => m('nav', m(Login), m(Settings))
+        const style = {
+            display: 'flex',
+            height: '2em',
+        }
+        const spacer = m('.spacer', { style: { flex: 1 }})
+        const loggedInOnly = []
+        if (State.myWs) {
+            loggedInOnly.push(
+                m(ToggleSetting, { name: 'audio', image: '/svg/microphone.svg' }),
+                m(ToggleSetting, { name: 'video', image: '/svg/camera.svg' }),
+                m(ToggleSetting, { name: 'bars', image: '/svg/cards.svg' }),
+                m(ToggleSetting, { name: 'chat', image: '/svg/chat.svg' }),
+                m(ToggleSetting, { name: 'debug', image: '/svg/gear.svg' }),
+                m(ToggleSetting, { name: 'screen', image: '/svg/screen.svg', isOn, toggleFn }),
+            )
+        }
+        return m('nav', { style }, m(Login), spacer, ...loggedInOnly)
+    }
 }
 
 const Video = {
@@ -262,7 +266,13 @@ const Chat = {
 }
 
 const App = {
-    view: () => [m(Nav), m(Videos), m(Chat)]
+    view() {
+        // doesn't really belong here
+        if (State.myStream) {
+            State.myStream.getTracks().forEach(track => { track.enabled = State[track.kind] })
+        }
+        return [m(Nav), m(Videos), m(Chat)]
+    }
 }
 
 m.mount(document.body, App)

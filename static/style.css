@@ -13,11 +13,6 @@ body {
     display: grid;
     grid-template-rows: auto 1fr;
 }
-nav {
-    display: grid;
-    grid-auto-flow: column;
-    gap: 1em;
-}
 #chat {
     position: fixed;
     top: 0;
