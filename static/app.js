@@ -147,9 +147,16 @@ const VideoContainer = {
             position: 'relative',
             overflow: 'hidden',
         }
-        const skip = attrs.name === 'screen' && State.sharedScreenIsLocal
+        let isVisible = true
+        if ( attrs.name === 'screen' ) {
+            style.flex = 5
+            style.overflow = 'scroll'
+            if (State.sharedScreenIsLocal) {
+                isVisible = false
+            }
+        }
         return m('.video-container', { style },
-            skip ? undefined : m(Video, { stream: attrs.stream }),
+            isVisible && m(Video, { stream: attrs.stream }),
             m('pre', { style: debugStyle }, info),
         )
     },
@@ -180,9 +187,6 @@ const Videos = {
     },
     view: () => {
         const videos = []
-        if(State.sharedScreen) {
-            videos.push({ name: 'screen', stream: State.sharedScreen })
-        }
         if(State.myStream) {
             videos.push({ name: State.username, stream: State.myStream, ws: State.myWs, })
         }
@@ -190,6 +194,7 @@ const Videos = {
             videos.push({ name: peer.username, stream: peer.stream, rpc: peer.rpc, fileTransfers: peer.fileTransfers })
         }
         const style = {
+            flex: 1,
             display: 'grid',
             overflow: 'hidden',
             backgroundColor: 'black',
@@ -297,15 +302,15 @@ const App = {
             overflow: 'hidden',
         }
         const mainStyle = {
-            display: 'grid',
+            display: 'flex',
             width: '100dvw',
-            gridTemplateColumns: State.chat ? '50dvw 50dvw' : '100dvw',
         }
         return m('.app', { style: appStyle },
             m(Nav),
             State.myWs && m('main', { style: mainStyle },
                 m(Videos),
-                State.chat && m(Chat)
+                State.sharedScreen && m(VideoContainer, { name: 'screen', stream: State.sharedScreen }),
+                State.chat && m(Chat),
             )
         )
     }
