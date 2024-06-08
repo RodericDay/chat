@@ -158,17 +158,22 @@ const VideoContainer = {
 const Videos = {
     reFlow: ({ dom }) => {
         const N = dom.childNodes.length
-        let [X, Y] = [1, 1]
-        while (N > X * Y) {
-            if (X % 2 === Y % 2) {
-                X += 1
-            } else {
-                Y += 1
-            }
-        }
         const { width, height } = videos.getBoundingClientRect()
-        if (height / width > 3 / 4) {
-            [X, Y] = [Y, X]
+        let [X, Y, max] = [1, 1, 0]
+        for (let x = 1; x <= N; x += 1) {
+            for (let y = 1; y <= N; y += 1) {
+                if (x * y >= N) {
+                    const w = width / x
+                    const h = height / y
+                    const r = 3 / 5
+                    const a = Math.min(w * w * r, h * h / r)
+                    if (a > max) {
+                        max = a
+                        X = x
+                        Y = y
+                    }
+                }
+            }
         }
         dom.style.gridTemplateColumns = Array(X).fill('1fr').join(' ')
         dom.style.gridTemplateRows = Array(Y).fill('1fr').join(' ')
