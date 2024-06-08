@@ -43,7 +43,7 @@ const Login = {
         }
         return m('form', { onsubmit: State.myWs ? this.logOut : this.logIn },
             m('button', { style }, State.myWs ? 'log out' : 'log in'),
-            m('input[name=username][autocomplete=off]', { style , disabled: !!State.myWs }),
+            m('input[name=username][autocomplete=off][placeholder=username]', { style , disabled: !!State.myWs }),
         )
     }
 }
