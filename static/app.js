@@ -212,6 +212,7 @@ const Post = {
         [/\n+/g, `<br/>`],
         [/(\*.+\*)/g, (_, a) => `<b>${a}</b>`],
         [/(_.+_)/g, (_, a) => `<i>${a}</i>`],
+        [/\b(https?:\/\/\S+)\b/g, (_, a) => `<a target="blank_" href="${a}">${a}</a>`],
         [/\[([^\]]+)\]\((blob:\S+?)\)/g, (_, a, b) => `<a target="blank_" href="${b}">${a}</a>`],
     ]),
     escape(string) {
