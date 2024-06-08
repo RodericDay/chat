@@ -42,8 +42,8 @@ const Login = {
             padding: '0 1em',
         }
         return m('form', { onsubmit: State.myWs ? this.logOut : this.logIn },
-            m('input[name=username][autocomplete=off]', { style , disabled: !!State.myWs }),
             m('button', { style }, State.myWs ? 'log out' : 'log in'),
+            m('input[name=username][autocomplete=off]', { style , disabled: !!State.myWs }),
         )
     }
 }
@@ -58,7 +58,7 @@ const ToggleSetting = {
         const style = {
             height: '100%',
             filter: 'grayscale(1)',
-            opacity: isOn ? 1 : 0.2,
+            opacity: isOn ? 1 : 0.4,
         }
         return m('img', { onclick: toggleFn, src: image, alt: name, style })
     },
@@ -107,12 +107,16 @@ const Video = {
 
 const VideoContainer = {
     view({ attrs }) {
-        let info = attrs.name
+        const muted = !attrs.stream.getAudioTracks().some(track => track.enabled)
+        let info = `${ attrs.name } ${ muted ? '(muted)' : '' }`
         if (State.debug) {
             const debug = {
                 name: attrs.name,
                 id: attrs.stream.id,
-                tracks: Object.fromEntries(attrs.stream.getTracks().map(track => [track.label, track.kind])),
+                tracks: Object.fromEntries(attrs.stream.getTracks()
+                    .filter(track => track.enabled)
+                    .map(track => [track.label, track.kind])
+                ),
             }
             if (attrs.ws) {
                 debug.ws = ['CONNECTING', 'OPEN', 'CLOSING', 'CLOSED', null][attrs.ws.readyState || 4]
@@ -128,7 +132,7 @@ const VideoContainer = {
             if (attrs.fileTransfers) {
                 debug.fileTransfers = attrs.fileTransfers.map(ft => ft.render())
             }
-            info = JSON.stringify(debug, null, 2)
+            info += '\n' + JSON.stringify(debug, null, 2)
         }
         const debugStyle = {
             position: 'absolute',
@@ -136,7 +140,7 @@ const VideoContainer = {
             color: 'limegreen',
             backgroundColor: 'rgba(0, 0, 0, 0.5)',
             transform: 'scaleX(1)',
-            fontSize: 'xx-small',
+            fontSize: 'x-small',
             whiteSpace: 'pre-wrap',
         }
         const style = {
