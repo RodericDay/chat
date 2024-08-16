@@ -14,7 +14,8 @@ services:
     build:
       dockerfile_inline: |
         FROM python:3-alpine
-        RUN pip install websockets
+        RUN pip install websockets pytest-asyncio
     command: python -u chat.py
+    working_dir: /src/
     volumes:
-      - ./src/chat.py:/chat.py
+      - ./src/:/src/
