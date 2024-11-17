@@ -20,7 +20,7 @@ async def broadcast(room, data):
 
 
 async def handle(websocket):
-    room = rooms[websocket.path]
+    room = rooms[websocket.request.path]
     username = json.loads(await websocket.recv())['username']
     if not username:
         await websocket.send('Username cannot be blank')

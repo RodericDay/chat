@@ -1,31 +1,18 @@
 services:
 
-  caddy:
-    image: caddy
-    ports:
-      - 80:80
-      - 443:443
-    volumes:
-      - ./static/:/abcxyz/
-      - ./Caddyfile:/etc/caddy/Caddyfile
-      - /data/caddy_data:/data/
-
   chat:
     build:
       dockerfile_inline: |
         FROM python:3-alpine
-        RUN pip install websockets pytest-asyncio psycopg2-binary
-    command: python -u chat.py
-    working_dir: /src/
-    volumes:
-      - ./src/:/src/
-      - .env:/src/.env
-
-  postgres:
-    image: postgres
-    restart: always
-    env_file: .env
+        RUN apk add rsvg-convert
+        RUN pip install websockets pytest-asyncio
+        WORKDIR /app/
+        COPY src .
+        COPY static/svg/pico.svg pico.svg
     ports:
-      - 5432:5432
-    volumes:
-      - /data/postgres_data/:/var/lib/postgresql/data/
+      - 9754:9754
+    command: python3 -u chat.py
+
+  coturn_server:
+    image: coturn/coturn:4.5.2
+    network_mode: host

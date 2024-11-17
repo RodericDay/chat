@@ -26,8 +26,8 @@ async function createWebSocket(username) {
 
 async function startMyStream() {
     const config = {
-        audio: true,
-        video: {width: {ideal: 320}, facingMode: 'user', frameRate: 26}
+        audio: { echoCancellation: true },
+        video: { width: { ideal: 320 }, facingMode: 'user', frameRate: 26 }
     }
     State.myStream = await navigator.mediaDevices.getUserMedia(config)
 }
