@@ -13,6 +13,6 @@ services:
       - 9754:9754
     command: python3 -u chat.py
 
-  coturn_server:
-    image: coturn/coturn:4.5.2
-    network_mode: host
+  # coturn_server:
+  #   image: coturn/coturn:4.5.2
+  #   network_mode: host

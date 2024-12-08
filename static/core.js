@@ -37,7 +37,7 @@ async function createPeer(username, polite) {
     const config = {
         iceServers: [
             {
-                urls: [`stun:165.227.36.123:5349`, `turn:165.227.36.123:5349`],
+                urls: ['stun:stun.zari.chat:5349', 'turn:turn.zari.chat:5349'],
                 username: 'roderic',
                 credential: 'tomodachi',
             },
