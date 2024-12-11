@@ -24,11 +24,13 @@ interface PeerStreamProps {
   ws: ReconnectingWebSocket | null
   myStream: MediaStream
   polite: boolean
+  bordersOn: boolean
+  debugOn: boolean
 }
 
-const generateDebugString = (rpc: RTCPeerConnection, polite: boolean, username: string) => {
+const generateDebugString = (rpc: RTCPeerConnection | undefined, polite: boolean, username: string) => {
   const tracks = Object.fromEntries(
-    rpc.getReceivers().map((r) => [r.track.kind, r.track.label])
+    rpc?.getReceivers().map((r) => [r.track.kind, r.track.label]) || []
   )
   return JSON.stringify({
     username,
@@ -43,7 +45,7 @@ const generateDebugString = (rpc: RTCPeerConnection, polite: boolean, username: 
   }, null, 2)
 }
 
-const PeerStream = ({ username, ws, myStream, polite }:PeerStreamProps) => {
+const PeerStream = ({ debugOn, bordersOn, username, ws, myStream, polite }:PeerStreamProps) => {
   const [rpc, setRpc] = useState<RTCPeerConnection>()
   const [debugString, setDebugString] = useState('')
   const videoRef = useRef<HTMLVideoElement>(null)
@@ -64,7 +66,6 @@ const PeerStream = ({ username, ws, myStream, polite }:PeerStreamProps) => {
       }
       (videoRef.current?.srcObject as MediaStream).addTrack(track)
     }
-
     myStream.getTracks().forEach(track => rpc.addTrack(track))
   }, [username, ws, myStream])
   
@@ -99,7 +100,6 @@ const PeerStream = ({ username, ws, myStream, polite }:PeerStreamProps) => {
       }
 
     }
-    setDebugString(generateDebugString(rpc, polite, username))
   }, [rpc, username, ws, polite])
 
   useEffect(() => {
@@ -114,8 +114,17 @@ const PeerStream = ({ username, ws, myStream, polite }:PeerStreamProps) => {
     }
   }, [ws, username, polite])
 
+  useEffect(() => {
+    setDebugString(debugOn ? generateDebugString(rpc, polite, username) : username)
+  }, [rpc, username, polite, debugOn])
+
   return <div className="video-container">
-    <video ref={videoRef} autoPlay playsInline></video>
+    <video
+      ref={videoRef}
+      style={ {objectFit: bordersOn ? 'contain' : 'cover'} }
+      autoPlay 
+      playsInline>  
+    </video>
     <span className="overlay">{debugString}</span>
   </div>
 }

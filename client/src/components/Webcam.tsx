@@ -1,7 +1,15 @@
 import { Dispatch, SetStateAction, useEffect, useRef, useState } from 'react'
 
+const config = {
+  audio: { echoCancellation: true },
+  video: { width: { ideal: 320 }, facingMode: 'user', frameRate: 26 }
+}
+
 interface WebcamStreamProps {
   username: string
+  bordersOn: boolean
+  debugOn: boolean
+  stream: MediaStream
   setStream: Dispatch<SetStateAction<MediaStream>>
 }
 
@@ -16,29 +24,22 @@ const generateDebugString = (username: string, stream: MediaStream) => {
   
 }
 
-const WebcamStream = ({ username, setStream }:WebcamStreamProps) => {
+const WebcamStream = ({ debugOn, bordersOn, username, stream, setStream }:WebcamStreamProps) => {
   const videoRef = useRef<HTMLVideoElement>(null)
   const [debugString, setDebugString] = useState('')
-  const [hasError, setHasError] = useState(false)
 
   useEffect(() => {
 
     const startVideoStream = async () => {
       try {
-        const config = {
-          audio: { echoCancellation: true },
-          video: { width: { ideal: 320 }, facingMode: 'user', frameRate: 26 }
-        }
         const stream = await navigator.mediaDevices.getUserMedia(config)
         setStream(stream)
-        setDebugString(generateDebugString(username, stream))
         
         if (videoRef.current) {
           videoRef.current.srcObject = stream
         }
       } catch (error) {
         console.error('Error accessing webcam:', error)
-        setHasError(true)
       }
     }
 
@@ -51,14 +52,22 @@ const WebcamStream = ({ username, setStream }:WebcamStreamProps) => {
         tracks.forEach(track => track.stop())
       }
     }
-  }, [])
+  }, [setStream])
+
+  useEffect(() => {
+    setDebugString(debugOn ? generateDebugString(username, stream) : username)
+  }, [username, stream, debugOn])
   
   return (
     <div className="video-container">
-      {hasError
-      ? <p>There was an error accessing the webcam. Please check your device permissions.</p>
-      : <video className="self" ref={videoRef} autoPlay playsInline muted></video>
-      }
+      <video
+        ref={videoRef}
+        className="self"
+        style={ { objectFit: bordersOn ? 'contain' : 'cover' } }
+        autoPlay 
+        playsInline 
+        muted>
+      </video>
       <span className="overlay">{debugString}</span>
     </div>
   )
