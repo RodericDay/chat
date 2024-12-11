@@ -1,24 +1,43 @@
 import ReconnectingWebSocket from 'reconnecting-websocket'
-import { useEffect, useState } from "react"
+import { Dispatch, SetStateAction, useEffect, useState } from "react"
 
-const Connection = ({ username, setWs }) => {
-    const [state, setState] = useState('')
-    const opts = ['CONNECTING', 'OPEN', 'CLOSING', 'CLOSED']
+interface ConnectionProps {
+    username: string
+    setWs: Dispatch<SetStateAction<ReconnectingWebSocket | null>>
+}
+
+enum WebSocketState {
+    CONNECTING = 'CONNECTING',
+    OPEN = 'OPEN',
+    CLOSED = 'CLOSED',
+}
+
+enum WebSocketColor {
+    CONNECTING = 'gold',
+    OPEN = 'lime',
+    CLOSED = 'crimson',
+}
+
+const Connection = ({ username, setWs }:ConnectionProps) => {
+    const [state, setState] = useState<WebSocketState>(WebSocketState.CONNECTING)
 
     useEffect(() => {
         const ws = new ReconnectingWebSocket('wss://chat.roderic.ca')
+        setWs(ws)
         ws.onopen = () => {
-            setState(opts[ws?.readyState || 0])
+            setState(WebSocketState.OPEN)
             ws.send(JSON.stringify({ username }))
         }
         ws.onclose = () => {
-            setState(opts[ws?.readyState || 0])
+            setState(WebSocketState.CLOSED)
         }
-        setWs(ws)
         return () => ws?.close()
-    }, [username])  
+    }, [username, setWs])  
 
-    return <span>{state}</span>
+    return <div className='circle'
+            style={ {backgroundColor: WebSocketColor[state] } }
+            title={ state }
+        ></div>
 }
 
 export default Connection

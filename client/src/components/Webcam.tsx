@@ -1,7 +1,24 @@
-import { useEffect, useRef, useState } from 'react'
+import { Dispatch, SetStateAction, useEffect, useRef, useState } from 'react'
 
-const WebcamStream = ({ username, setStream }) => {
+interface WebcamStreamProps {
+  username: string
+  setStream: Dispatch<SetStateAction<MediaStream>>
+}
+
+const generateDebugString = (username: string, stream: MediaStream) => {
+  const tracks = Object.fromEntries(
+    stream.getTracks().map((e: { label: string, kind: string }) => [e.kind, e.label])
+  )
+  return JSON.stringify({
+    username,
+    tracks,
+  }, null, 2)
+  
+}
+
+const WebcamStream = ({ username, setStream }:WebcamStreamProps) => {
   const videoRef = useRef<HTMLVideoElement>(null)
+  const [debugString, setDebugString] = useState('')
   const [hasError, setHasError] = useState(false)
 
   useEffect(() => {
@@ -14,6 +31,7 @@ const WebcamStream = ({ username, setStream }) => {
         }
         const stream = await navigator.mediaDevices.getUserMedia(config)
         setStream(stream)
+        setDebugString(generateDebugString(username, stream))
         
         if (videoRef.current) {
           videoRef.current.srcObject = stream
@@ -35,21 +53,13 @@ const WebcamStream = ({ username, setStream }) => {
     }
   }, [])
   
-  const tracks = Object.fromEntries(
-    videoRef?.current?.srcObject?.getTracks().map(({ label, kind }) => [kind, label]) || []
-  )
-  const debug = JSON.stringify({
-    username,
-    tracks,
-  }, null, 2)
-
   return (
     <div className="video-container">
       {hasError
       ? <p>There was an error accessing the webcam. Please check your device permissions.</p>
       : <video className="self" ref={videoRef} autoPlay playsInline muted></video>
       }
-      <span className="overlay">{debug}</span>
+      <span className="overlay">{debugString}</span>
     </div>
   )
 }
