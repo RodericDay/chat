@@ -7,6 +7,7 @@ import Button from './components/Button'
 import Connection from './components/Connection'
 import Chat from './components/Chat'
 import PeerStream from './components/Peer'
+import ScreenShare from './components/ScreenShare'
 import './App.css'
 
 type Message = {
@@ -32,6 +33,7 @@ function App() {
   const [chatOn, setChatOn] = useStickyState(true, 'chatOn')
   const [debugOn, setDebugOn] = useStickyState(true, 'debugOn')
   const [bordersOn, setBordersOn] = useStickyState(true, 'bordersOn')
+  const [screenSharingOn, setScreenSharingOn] = useState(false)
 
   const handleResize = useCallback((peers:[string, boolean][]) => {
     setGridStyle(calculateGridDimensions(peers.length + 1, videosContainerRef.current))
@@ -53,7 +55,7 @@ function App() {
 
   useEffect(() => {
     handleResize(peers)
-  }, [handleResize, peers, chatOn])
+  }, [handleResize, peers, chatOn, screenSharingOn])
 
   useEffect(() => {
     const onmessage = (e: { data: string }) => handleMessage(JSON.parse(e.data))
@@ -108,8 +110,9 @@ function App() {
         <Button img='/camera.svg' label='Video' state={videoOn} setState={setVideoOn} />
         <Button img='/microphone.svg' label='Audio' state={audioOn} setState={setAudioOn} />
         <Button img='/cards.svg' label='Borders' state={bordersOn} setState={setBordersOn} />
-        <Button img='/gear.svg' label='Debug' state={debugOn} setState={setDebugOn} />    
+        <Button img='/gear.svg' label='Debug' state={debugOn} setState={setDebugOn} />
         <Button img='/chat.svg' label='Chat' state={chatOn} setState={setChatOn} />
+        <Button img='/screen.svg' label='Screen Sharing' state={screenSharingOn} setState={setScreenSharingOn} />
       </header>
       <div className="desk">
         <div ref={videosContainerRef} className="videos" style={gridStyle}>
@@ -132,6 +135,7 @@ function App() {
             />
           ))}
         </div>
+        {!!screenSharingOn && <ScreenShare />}
         {!!chatOn && ws && <Chat messages={messages} ws={ws} />}
       </div>
     </main>

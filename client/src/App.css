@@ -50,6 +50,10 @@ header * {
   height: 100%;
   width: 100%;
 }
+.screen-share {
+  flex-grow: 1;
+  min-width: 50dvw;
+}
 .video-container {
   position: relative;
   overflow: hidden;
