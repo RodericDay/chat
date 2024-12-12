@@ -30,7 +30,9 @@ interface PeerStreamProps {
 
 const generateDebugString = (rpc: RTCPeerConnection | undefined, polite: boolean, username: string) => {
   const tracks = Object.fromEntries(
-    rpc?.getReceivers().map((r) => [r.track.kind, r.track.label]) || []
+    rpc?.getReceivers()
+      .filter(r => r.track.enabled)
+      .map(r => [r.track.kind, r.track.label]) || []
   )
   return JSON.stringify({
     username,
@@ -56,6 +58,7 @@ const PeerStream = ({ debugOn, bordersOn, username, ws, myStream, polite }:PeerS
     rpc.onnegotiationneeded = async () => {
       await rpc.setLocalDescription()
       ws?.send(JSON.stringify({ kind: 'offer', targets: [username], offer: rpc.localDescription }))
+      console.log(`[${username}] Set local description and sent offer`)
     }
     rpc.onicecandidate = ({ candidate }) => {
       ws?.send(JSON.stringify({ kind: 'icecandidate', targets: [username], candidate }))
@@ -67,7 +70,11 @@ const PeerStream = ({ debugOn, bordersOn, username, ws, myStream, polite }:PeerS
       (videoRef.current?.srcObject as MediaStream).addTrack(track)
     }
     myStream.getTracks().forEach(track => rpc.addTrack(track))
-  }, [username, ws, myStream])
+    console.log(`[${username}] Created RPC`)
+    return () => {
+      console.log(`[${username}] Ended RPC`)
+    }
+  }, [myStream, username, ws])
   
   const handleMessage = useCallback(async (message: Message) => {
     if (!rpc || message.sender !== username) {
@@ -78,20 +85,26 @@ const PeerStream = ({ debugOn, bordersOn, username, ws, myStream, polite }:PeerS
 
       if (rpc.signalingState === 'stable') {
         await rpc.setRemoteDescription(message.offer)
+        console.log(`[${username}] Set remote offer`)
+
       } else if (polite) {
         await Promise.all([
             rpc.setLocalDescription({ type: 'rollback' }),
             rpc.setRemoteDescription(message.offer),
         ])
+        console.log(`[${username}] Rolled back local and set remote offer`)
+
       } else {
         return
       }
       await rpc.setLocalDescription(await rpc.createAnswer())
       ws?.send(JSON.stringify({ kind: 'answer', targets: [message.sender], answer: rpc.localDescription }))
+      console.log(`[${username}] Created and sent answer`)
 
     } else if (message.kind === 'answer') {
 
       await rpc.setRemoteDescription(message.answer)
+      console.log(`[${username}] Received and set remote answer`)
 
     } else if (message.kind === 'icecandidate') {
 

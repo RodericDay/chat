@@ -288,37 +288,3 @@ const Chat = {
         ]
     }
 }
-
-const App = {
-    view() {
-        // doesn't really belong here
-        if (State.myStream) {
-            State.myStream.getTracks().forEach(track => { track.enabled = State[track.kind] })
-        }
-        const appStyle = {
-            position: 'fixed',
-            top: 0,
-            left: 0,
-            width: '100dvw',
-            height: '100dvh',
-            display: 'grid',
-            gridTemplateRows: '2em calc(100dvh - 2em)',
-            overflow: 'hidden',
-        }
-        const mainStyle = {
-            display: 'flex',
-            width: '100dvw',
-        }
-        return m('.app', { style: appStyle },
-            m(Nav),
-            State.myWs && m('main', { style: mainStyle },
-                m(Videos),
-                State.sharedScreen && m(VideoContainer, { name: 'screen', stream: State.sharedScreen }),
-                State.chat && m(Chat),
-            )
-        )
-    }
-}
-
-m.mount(document.body, App)
-setInterval(m.redraw, 1000)

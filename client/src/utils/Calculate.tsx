@@ -1,5 +1,5 @@
-export const calculateGridDimensions = (N: number) => {
-  const { outerWidth: width, outerHeight: height } = window
+export const calculateGridDimensions = (N: number, el: HTMLDivElement | null) => {
+  const { width, height } = el?.getBoundingClientRect() || window.screen
   let [X, Y, max] = [1, 1, 0]
   for (let x = 1; x <= N; x += 1) {
     for (let y = 1; y <= N; y += 1) {

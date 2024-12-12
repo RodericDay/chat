@@ -2,11 +2,11 @@
   <defs>
     <polygon id="teeth" points="-4,-.8 -4,.8 0,2 4,.8 4,-.8 0,-2" fill="white"/>
   </defs>
-  <rect x="-5" y="-5" width="10" height="10" fill="green" />
+  <rect x="-5" y="-5" width="10" height="10" />
   <use xlink:href="#teeth" transform="rotate(0)"/>
   <use xlink:href="#teeth" transform="rotate(45)"/>
   <use xlink:href="#teeth" transform="rotate(90)"/>
   <use xlink:href="#teeth" transform="rotate(135)"/>
   <circle cx="0" cy="0" r="3.5" fill="white" />
-  <circle cx="0" cy="0" r="2" fill="green" />
+  <circle cx="0" cy="0" r="2" />
 </svg>

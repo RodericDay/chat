@@ -1,5 +1,5 @@
 import ReconnectingWebSocket from 'reconnecting-websocket'
-import { useState, useEffect, useCallback } from 'react'
+import { useState, useEffect, useCallback, useRef } from 'react'
 import { useStickyState } from './utils/StickyState'
 import { calculateGridDimensions } from './utils/Calculate'
 import WebcamStream from './components/Webcam'
@@ -23,6 +23,9 @@ function App() {
   const [messages, setMessages] = useState<Message[]>([])
   const [peers, setPeers] = useState<[string, boolean][]>([])
   const [gridStyle, setGridStyle] = useState<object>({})
+  const videosContainerRef = useRef<HTMLDivElement>(null)
+
+  const [loggedIn, setLoggedIn] = useState(!!username)
 
   const [videoOn, setVideoOn] = useStickyState(false, 'videoOn')
   const [audioOn, setAudioOn] = useStickyState(true, 'audioOn')
@@ -31,7 +34,7 @@ function App() {
   const [bordersOn, setBordersOn] = useStickyState(true, 'bordersOn')
 
   const handleResize = useCallback((peers:[string, boolean][]) => {
-    setGridStyle(calculateGridDimensions(peers.length + 1))
+    setGridStyle(calculateGridDimensions(peers.length + 1, videosContainerRef.current))
   }, [])
 
   const handleMessage = useCallback((message: Message) => {
@@ -49,9 +52,8 @@ function App() {
   }, [messages, peers])
 
   useEffect(() => {
-    console.log(`${peers.length + 1} user(s) online`)
     handleResize(peers)
-  }, [peers, handleResize])
+  }, [handleResize, peers, chatOn])
 
   useEffect(() => {
     const onmessage = (e: { data: string }) => handleMessage(JSON.parse(e.data))
@@ -79,38 +81,59 @@ function App() {
     stream.getAudioTracks().forEach(track => { track.enabled = audioOn })
   }, [audioOn, stream])
 
+  useEffect(() => {
+    console.log(loggedIn ? 'Logged in' : 'Logged out')
+  }, [loggedIn])
+
   return (
-    <main>
-      <header>
-        <Connection username={username} setWs={setWs} />
-        <input disabled onChange={(e) => setUsername(e.target.value)} value={username} />
-        <Button img='/camera.svg' label='Video' state={videoOn} setState={setVideoOn} />
-        <Button img='/microphone.svg' label='Audio' state={audioOn} setState={setAudioOn} />
-        <Button img='/cards.svg' label='Borders' state={bordersOn} setState={setBordersOn} />
-        <Button img='/chat.svg' label='Chat' state={chatOn} setState={setChatOn} />
-        <Button img='/gear.svg' label='Debug' state={debugOn} setState={setDebugOn} />    
-      </header>
-      <div className="videos" style={gridStyle}>
+    !loggedIn
+    ? <main>
+        <header>
+          <button className="auth-button" onClick={() => setLoggedIn(true)}>log in</button>
+          <input className="auth-input" onChange={(e) => setUsername(e.target.value)} value={username} />
+        </header>
         <WebcamStream
-          debugOn={debugOn}
-          bordersOn={bordersOn} 
+          debugOn={true}
+          bordersOn={bordersOn}
           username={username}
           stream={stream}
           setStream={setStream}
         />
-        {[...peers].map(([username, polite]) => (
-          <PeerStream
+      </main>
+    : <main>
+      <header>
+        <Connection username={username} setWs={setWs} />
+        <button className="auth-button" onClick={() => setLoggedIn(false)}>log out</button>
+        <input className="auth-input" disabled onChange={(e) => setUsername(e.target.value)} value={username} />
+        <Button img='/camera.svg' label='Video' state={videoOn} setState={setVideoOn} />
+        <Button img='/microphone.svg' label='Audio' state={audioOn} setState={setAudioOn} />
+        <Button img='/cards.svg' label='Borders' state={bordersOn} setState={setBordersOn} />
+        <Button img='/gear.svg' label='Debug' state={debugOn} setState={setDebugOn} />    
+        <Button img='/chat.svg' label='Chat' state={chatOn} setState={setChatOn} />
+      </header>
+      <div className="desk">
+        <div ref={videosContainerRef} className="videos" style={gridStyle}>
+          <WebcamStream
             debugOn={debugOn}
-            bordersOn={bordersOn}
-            key={username}
-            ws={ws}
+            bordersOn={bordersOn} 
             username={username}
-            myStream={stream}
-            polite={polite}
+            stream={stream}
+            setStream={setStream}
           />
-        ))}
+          {[...peers].map(([username, polite]) => (
+            <PeerStream
+              key={username}
+              debugOn={debugOn}
+              bordersOn={bordersOn}
+              ws={ws}
+              username={username}
+              myStream={stream}
+              polite={polite}
+            />
+          ))}
+        </div>
+        {!!chatOn && ws && <Chat messages={messages} ws={ws} />}
       </div>
-      {!!chatOn && ws && <Chat messages={messages} ws={ws} />}
     </main>
   )
 }

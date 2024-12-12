@@ -21,7 +21,6 @@ const generateDebugString = (username: string, stream: MediaStream) => {
     username,
     tracks,
   }, null, 2)
-  
 }
 
 const WebcamStream = ({ debugOn, bordersOn, username, stream, setStream }:WebcamStreamProps) => {
@@ -34,10 +33,10 @@ const WebcamStream = ({ debugOn, bordersOn, username, stream, setStream }:Webcam
       try {
         const stream = await navigator.mediaDevices.getUserMedia(config)
         setStream(stream)
-        
         if (videoRef.current) {
           videoRef.current.srcObject = stream
         }
+        console.log('Acquired and set stream', stream.id)
       } catch (error) {
         console.error('Error accessing webcam:', error)
       }
