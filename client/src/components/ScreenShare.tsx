@@ -4,9 +4,20 @@ const getScreen = async () => {
   return await navigator.mediaDevices.getDisplayMedia()
 }
 
-const ScreenShare = () => {
+const ScreenShare = ({ ws }:{ ws: WebSocket }) => {
   const videoRef = useRef<HTMLVideoElement>(null)
   const streamRef = useRef<MediaStream | null>(null)
+
+  useEffect(() => {
+    const onMessage = (e: MessageEvent) => {
+      const message = JSON.parse(e.data)
+      console.log('@', message)
+    }
+    ws.addEventListener('message', onMessage)
+    return () => {
+      ws.removeEventListener('message', onMessage)
+    }
+  }, [ws])
 
   useEffect(() => {
     const startScreenShare = async () => {
@@ -14,6 +25,7 @@ const ScreenShare = () => {
       if (videoRef.current) {
         videoRef.current.srcObject = streamRef.current
       }
+      ws.send(JSON.stringify({ kind: 'screen' }))
     }
 
     startScreenShare()

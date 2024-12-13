@@ -24,12 +24,7 @@ const onOffer = async (rpc: RTCPeerConnection, offer: RTCSessionDescriptionInit,
   return answer
 }
 
-export const connect = (
-    username: string,
-    ws: WebSocket,
-    stream: MediaStream,
-    polite: boolean,
-  ) => {
+export const connect = (username: string, ws: WebSocket, stream: MediaStream, polite: boolean) => {
   const rpc = new RTCPeerConnection(config)
   console.log(`[${username}] Created RPC connection`)
 

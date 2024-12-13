@@ -41,6 +41,10 @@ const PeerStream = ({ debugOn, bordersOn, username, ws, myStream, polite }:PeerS
   }, [debugOn, rpc, polite, username])
 
   useEffect(() => {
+    updateDebug()
+  }, [updateDebug])
+
+  useEffect(() => {
     const doConnect = async () => {
       if (ws) {
         const rpc = await connect(username, ws as WebSocket, stream, polite)
@@ -49,6 +53,9 @@ const PeerStream = ({ debugOn, bordersOn, username, ws, myStream, polite }:PeerS
       }
     }
     doConnect()
+    return () => {
+      rpc?.getReceivers().forEach(({ track }) => track.stop())
+    }
   }, [])
 
   useEffect(() => {
@@ -64,10 +71,6 @@ const PeerStream = ({ debugOn, bordersOn, username, ws, myStream, polite }:PeerS
       videoRef.current.srcObject = stream
     }
   }, [stream])
-
-  useEffect(() => {
-    updateDebug()
-  }, [updateDebug])
 
   useEffect(() => {
     if (!polite) {

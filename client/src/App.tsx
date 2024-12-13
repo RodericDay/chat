@@ -135,7 +135,7 @@ function App() {
             />
           ))}
         </div>
-        {!!screenSharingOn && <ScreenShare />}
+        {!!screenSharingOn && <ScreenShare ws={ws as WebSocket} />}
         {!!chatOn && ws && <Chat messages={messages} ws={ws} />}
       </div>
     </main>
